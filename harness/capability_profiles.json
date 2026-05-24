@@ -1,0 +1,24 @@
+{
+  "gemma4": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.9,
+      "code_gen": 0.9,
+      "test_write": 0.9
+    },
+    "session_failures": 0,
+    "retry_budget": 3
+  },
+  "claude_agent": {
+    "max_reliable_tokens": 180000,
+    "accuracy_by_type": {
+      "code_edit": 0.95,
+      "code_gen": 0.92,
+      "research": 0.9,
+      "cross_file_refactor": 0.9,
+      "test_write": 0.93
+    },
+    "session_failures": 0,
+    "retry_budget": 10
+  }
+}

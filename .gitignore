@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# local benchmark results (large, user-specific)
+gemma4-bench/bench_results.json
+
+# SQLite session log (local, not shared)
+harness/session_stats.db
+
+# opencode node_modules (installed by setup.sh per-user)
+node_modules/
