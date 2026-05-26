@@ -4,7 +4,9 @@ This repo IS the harness. When working here, you are configuring or extending th
 
 ## What conductor does
 
-Offloads mechanical coding tasks (code edits, code gen, test writing) to gemma4 running locally via ollama. Claude orchestrates; gemma4 executes small, bounded tasks.
+Offloads mechanical coding tasks (code edits, code gen, file creation, test writing) to gemma4 running locally via ollama. Claude orchestrates; gemma4 executes small, bounded tasks.
+
+gemma4 can **edit existing files** and **create new files** — the harness handles filesystem I/O, gemma4 only does the text transformation.
 
 ## Running tasks via the harness
 

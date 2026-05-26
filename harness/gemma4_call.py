@@ -42,21 +42,26 @@ def main() -> int:
     task = sys.argv[2]
     files = sys.argv[3:]
 
-    # Build prompt with embedded file contents
+    # Build prompt with embedded file contents (skip missing files — creation mode)
     sections = [task, ""]
+    target_exists = (workdir / files[0]).exists()
     for f in files:
         path = workdir / f
-        if not path.exists():
-            print(f"Error: file not found: {path}", file=sys.stderr)
-            return 1
-        sections.append(f"--- FILE: {f} ---")
-        sections.append(path.read_text())
-        sections.append("")
+        if path.exists():
+            sections.append(f"--- FILE: {f} ---")
+            sections.append(path.read_text())
+            sections.append("")
 
-    sections.append(
-        f"Output ONLY the complete modified version of {files[0]} "
-        "inside a single fenced code block. No explanation, no other text."
-    )
+    if target_exists:
+        sections.append(
+            f"Output ONLY the complete modified version of {files[0]} "
+            "inside a single fenced code block. No explanation, no other text."
+        )
+    else:
+        sections.append(
+            f"Output ONLY the complete contents of the new file {files[0]} "
+            "inside a single fenced code block. No explanation, no other text."
+        )
     prompt = "\n".join(sections)
 
     print(f"[gemma4] Calling ollama ({MODEL})...", file=sys.stderr)
