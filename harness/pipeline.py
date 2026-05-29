@@ -25,22 +25,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
 
-from harness.evaluator import evaluate
-from harness.gemma4_call import run as gemma4_run
-from harness.healer import auto_heal as _auto_heal
-from harness.models import AgentType, EvalResult, SubTask
-from harness.profiles import load_profiles, save_profiles, update_accuracy
-from harness.router import route
-from harness.session_stats import log_delegation, update_score
+from harness.models import EvalResult, SubTask
+from harness.orchestrate import EscalateToClaudeError, orchestrate
 from harness.tokens import estimate_tokens
 
 
 @dataclass
 class PipelineResult:
     subtask_id: str
-    agent_used: AgentType
+    agent_used: str             # was AgentType; widened to str for multi-provider support
     final_score: int
     strategy: str | None       # None = no healing needed; "A"/"B"/"C" = healer ran
     eval_result: EvalResult
@@ -51,68 +45,32 @@ def run_pipeline(
     subtask: SubTask,
     workdir: str = ".",
     diff_mode: bool = False,
-    auto_heal: bool = True,
+    auto_heal: bool = True,   # kept for API compat; orchestrate always heals internally
 ) -> PipelineResult:
     """
-    Full pipeline for a single subtask:
-        1. Route — choose gemma4 or claude_agent
-        2. Delegate to gemma4 (if routed there)
-        3. Evaluate output
-        4. Auto-heal (A→B) if score < 70 and auto_heal=True
-        5. Return PipelineResult
-
-    When routed to claude_agent, returns a PipelineResult with routed_to_claude=True
-    and score=-1 (caller handles claude_agent delegation externally).
+    Full pipeline for a single subtask via the multi-provider orchestrator.
+    Returns PipelineResult. Sets routed_to_claude=True when all local providers fail.
     """
-    session_id = os.environ.get("CONDUCTOR_SESSION_ID", "default")
-
-    # Auto-estimate tokens if missing
     if not subtask.estimated_tokens:
         subtask.estimated_tokens = estimate_tokens(subtask.files, workdir)
 
-    profiles = load_profiles()
-    agent = route(subtask, profiles)
-
-    log_delegation(
-        session_id=session_id,
-        task_id=subtask.id,
-        task_type=subtask.type.value,
-        agent=agent.value,
-        estimated_tokens=subtask.estimated_tokens,
-    )
-
-    if agent == AgentType.CLAUDE_AGENT:
+    try:
+        result = orchestrate(subtask, workdir=workdir, diff_mode=diff_mode)
+    except EscalateToClaudeError:
         dummy = EvalResult(
-            subtask_id=subtask.id, agent=agent, score=-1,
+            subtask_id=subtask.id, agent="claude_agent", score=-1,
             syntax_score=0, test_score=0, scope_score=0, semantic_score=0,
-            details="routed to claude_agent",
+            details="all providers exhausted — routed to claude_agent",
         )
         return PipelineResult(
-            subtask_id=subtask.id, agent_used=agent,
+            subtask_id=subtask.id, agent_used="claude_agent",
             final_score=-1, strategy=None, eval_result=dummy,
             routed_to_claude=True,
         )
 
-    # Delegate to gemma4
-    response, code = gemma4_run(workdir, subtask.description, subtask.files, diff_mode=diff_mode)
-    changed = [str(Path(workdir) / f) for f in subtask.files]
-    result = evaluate(subtask, agent, changed, response if code is None else code)
-    update_score(subtask.id, result.score)
-
-    strategy = None
-    if auto_heal and result.score < 70:
-        healed, strategy = _auto_heal(subtask, result, profiles, workdir, diff_mode=diff_mode)
-        if healed is not None:
-            result = healed
-            update_score(healed.subtask_id, healed.score)
-
-    # Update rolling accuracy and persist
-    update_accuracy(profiles, "gemma4", subtask.type.value, result.score)
-    save_profiles(profiles)
-
     return PipelineResult(
-        subtask_id=subtask.id, agent_used=agent,
-        final_score=result.score, strategy=strategy, eval_result=result,
+        subtask_id=subtask.id, agent_used=result.agent,
+        final_score=result.score, strategy=None, eval_result=result,
     )
 
 
@@ -151,7 +109,7 @@ if __name__ == "__main__":
 
     out = {
         "subtask_id": pr.subtask_id,
-        "agent_used": pr.agent_used.value,
+        "agent_used": pr.agent_used if isinstance(pr.agent_used, str) else pr.agent_used.value,
         "final_score": pr.final_score,
         "strategy": pr.strategy,
         "routed_to_claude": pr.routed_to_claude,

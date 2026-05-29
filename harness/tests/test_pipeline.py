@@ -1,6 +1,7 @@
 """Tests for harness/pipeline.py — run_pipeline() end-to-end flow."""
 import pytest
-from harness.models import SubTask, TaskType, AgentType, EvalResult, CapabilityProfile
+from harness.models import SubTask, TaskType, EvalResult
+from harness.orchestrate import EscalateToClaudeError
 from harness.pipeline import run_pipeline, PipelineResult
 
 
@@ -13,117 +14,87 @@ def _subtask(**overrides):
     return SubTask(**base)
 
 
-def _good_profiles():
-    return {
-        "gemma4": CapabilityProfile(
-            max_reliable_tokens=32000,
-            accuracy_by_type={"code_edit": 0.9},
-        ),
-        "claude_agent": CapabilityProfile(
-            max_reliable_tokens=180000,
-            accuracy_by_type={"code_edit": 0.95},
-        ),
-    }
-
-
-def _good_eval(subtask, agent, changed_files, output):
+def _good_result(subtask):
     return EvalResult(
-        subtask_id=subtask.id, agent=agent, score=80,
+        subtask_id=subtask.id, agent="gemma4", score=80,
         syntax_score=25, test_score=35, scope_score=20, semantic_score=0,
         details="ok",
     )
 
 
-def _bad_eval(subtask, agent, changed_files, output):
+def _bad_result(subtask):
     return EvalResult(
-        subtask_id=subtask.id, agent=agent, score=40,
+        subtask_id=subtask.id, agent="gemma4", score=40,
         syntax_score=25, test_score=0, scope_score=15, semantic_score=0,
         details="fail",
     )
 
 
 def test_routes_to_gemma4_and_scores_ok(tmp_path, monkeypatch):
-    monkeypatch.setattr("harness.pipeline.load_profiles", lambda: _good_profiles())
-    monkeypatch.setattr("harness.pipeline.save_profiles", lambda p: None)
-    monkeypatch.setattr("harness.pipeline.log_delegation", lambda **kw: None)
-    monkeypatch.setattr("harness.pipeline.update_score", lambda *a: None)
-    monkeypatch.setattr("harness.pipeline.update_accuracy", lambda *a, **kw: None)
-    monkeypatch.setattr("harness.pipeline.gemma4_run", lambda w, t, f, diff_mode=False: ("resp", "code"))
-    monkeypatch.setattr("harness.pipeline.evaluate", _good_eval)
+    st = _subtask()
+    monkeypatch.setattr("harness.pipeline.orchestrate", lambda s, workdir, diff_mode: _good_result(s))
 
-    pr = run_pipeline(_subtask(), workdir=str(tmp_path))
-    assert pr.agent_used == AgentType.GEMMA4
+    pr = run_pipeline(st, workdir=str(tmp_path))
+    assert pr.agent_used == "gemma4"
     assert pr.final_score == 80
     assert pr.strategy is None
     assert not pr.routed_to_claude
 
 
 def test_routes_to_claude_agent_for_research(tmp_path, monkeypatch):
-    monkeypatch.setattr("harness.pipeline.load_profiles", lambda: _good_profiles())
-    monkeypatch.setattr("harness.pipeline.save_profiles", lambda p: None)
-    monkeypatch.setattr("harness.pipeline.log_delegation", lambda **kw: None)
-    monkeypatch.setattr("harness.pipeline.update_score", lambda *a: None)
-    monkeypatch.setattr("harness.pipeline.update_accuracy", lambda *a, **kw: None)
+    st = _subtask(type=TaskType.RESEARCH)
 
-    pr = run_pipeline(
-        _subtask(type=TaskType.RESEARCH),
-        workdir=str(tmp_path),
-    )
+    def raise_escalate(s, workdir, diff_mode):
+        raise EscalateToClaudeError(s)
+
+    monkeypatch.setattr("harness.pipeline.orchestrate", raise_escalate)
+
+    pr = run_pipeline(st, workdir=str(tmp_path))
     assert pr.routed_to_claude is True
     assert pr.final_score == -1
-    assert pr.agent_used == AgentType.CLAUDE_AGENT
+    assert pr.agent_used == "claude_agent"
 
 
 def test_auto_heal_fires_on_low_score(tmp_path, monkeypatch):
-    monkeypatch.setattr("harness.pipeline.load_profiles", lambda: _good_profiles())
-    monkeypatch.setattr("harness.pipeline.save_profiles", lambda p: None)
-    monkeypatch.setattr("harness.pipeline.log_delegation", lambda **kw: None)
-    monkeypatch.setattr("harness.pipeline.update_score", lambda *a: None)
-    monkeypatch.setattr("harness.pipeline.update_accuracy", lambda *a, **kw: None)
-    monkeypatch.setattr("harness.pipeline.gemma4_run", lambda w, t, f, diff_mode=False: ("resp", "code"))
-    monkeypatch.setattr("harness.pipeline.evaluate", _bad_eval)
-
+    """orchestrate() handles healing internally; pipeline gets the healed result."""
+    st = _subtask()
     healed = EvalResult(
-        subtask_id="t1_shrunk", agent=AgentType.GEMMA4, score=75,
+        subtask_id="t1", agent="gemma4", score=75,
         syntax_score=25, test_score=35, scope_score=15, semantic_score=0, details="healed",
     )
-    monkeypatch.setattr("harness.pipeline._auto_heal", lambda *a, **kw: (healed, "A"))
+    monkeypatch.setattr("harness.pipeline.orchestrate", lambda s, workdir, diff_mode: healed)
 
-    pr = run_pipeline(_subtask(), workdir=str(tmp_path))
-    assert pr.strategy == "A"
+    pr = run_pipeline(st, workdir=str(tmp_path))
+    # strategy is None because orchestrate handles healing; pipeline sets None always
     assert pr.final_score == 75
+    assert pr.agent_used == "gemma4"
 
 
 def test_no_heal_flag_skips_healer(tmp_path, monkeypatch):
-    monkeypatch.setattr("harness.pipeline.load_profiles", lambda: _good_profiles())
-    monkeypatch.setattr("harness.pipeline.save_profiles", lambda p: None)
-    monkeypatch.setattr("harness.pipeline.log_delegation", lambda **kw: None)
-    monkeypatch.setattr("harness.pipeline.update_score", lambda *a: None)
-    monkeypatch.setattr("harness.pipeline.update_accuracy", lambda *a, **kw: None)
-    monkeypatch.setattr("harness.pipeline.gemma4_run", lambda w, t, f, diff_mode=False: ("resp", "code"))
-    monkeypatch.setattr("harness.pipeline.evaluate", _bad_eval)
+    """auto_heal=False is accepted for API compat; orchestrate is still called once."""
+    st = _subtask()
+    calls = {"n": 0}
 
-    heal_called = {"n": 0}
+    def track_orchestrate(s, workdir, diff_mode):
+        calls["n"] += 1
+        return _bad_result(s)
 
-    def track_heal(*a, **kw):
-        heal_called["n"] += 1
-        return None, "C"
-
-    monkeypatch.setattr("harness.pipeline._auto_heal", track_heal)
-    run_pipeline(_subtask(), workdir=str(tmp_path), auto_heal=False)
-    assert heal_called["n"] == 0
+    monkeypatch.setattr("harness.pipeline.orchestrate", track_orchestrate)
+    pr = run_pipeline(st, workdir=str(tmp_path), auto_heal=False)
+    assert calls["n"] == 1
+    assert pr.final_score == 40
 
 
 def test_strategy_c_when_both_fail(tmp_path, monkeypatch):
-    monkeypatch.setattr("harness.pipeline.load_profiles", lambda: _good_profiles())
-    monkeypatch.setattr("harness.pipeline.save_profiles", lambda p: None)
-    monkeypatch.setattr("harness.pipeline.log_delegation", lambda **kw: None)
-    monkeypatch.setattr("harness.pipeline.update_score", lambda *a: None)
-    monkeypatch.setattr("harness.pipeline.update_accuracy", lambda *a, **kw: None)
-    monkeypatch.setattr("harness.pipeline.gemma4_run", lambda w, t, f, diff_mode=False: ("resp", "code"))
-    monkeypatch.setattr("harness.pipeline.evaluate", _bad_eval)
-    monkeypatch.setattr("harness.pipeline._auto_heal", lambda *a, **kw: (None, "C"))
+    """All providers exhausted → EscalateToClaudeError → routed_to_claude."""
+    st = _subtask()
 
-    pr = run_pipeline(_subtask(), workdir=str(tmp_path))
-    assert pr.strategy == "C"
-    assert pr.final_score == 40  # original bad score
+    def raise_escalate(s, workdir, diff_mode):
+        raise EscalateToClaudeError(s)
+
+    monkeypatch.setattr("harness.pipeline.orchestrate", raise_escalate)
+
+    pr = run_pipeline(st, workdir=str(tmp_path))
+    assert pr.routed_to_claude is True
+    assert pr.final_score == -1
+    assert pr.agent_used == "claude_agent"
