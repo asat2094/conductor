@@ -8,43 +8,47 @@
   },
   "deepseek": {
     "type": "openai_compat",
-    "model": "deepseek-coder",
+    "model": "deepseek-v4-flash",
     "base_url": "https://api.deepseek.com/v1",
     "api_key_env": "DEEPSEEK_API_KEY",
-    "cost_per_1k_tokens": 0.0014,
-    "tier": "cloud_cheap"
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "deepseek-v4-flash is the new name; free tier with 10M welcome tokens on new accounts"
   },
   "nim": {
     "type": "openai_compat",
-    "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+    "model": "meta/llama-3.1-8b-instruct",
     "base_url": "https://integrate.api.nvidia.com/v1",
     "api_key_env": "NIM_API_KEY",
-    "cost_per_1k_tokens": 0.001,
-    "tier": "cloud_cheap"
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "free tier 40 RPM; coding upgrade: qwen/qwen2.5-coder-32b-instruct"
   },
   "gemini": {
     "type": "openai_compat",
-    "model": "gemini-2.0-flash",
+    "model": "gemini-2.5-flash",
     "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "api_key_env": "GEMINI_API_KEY",
-    "cost_per_1k_tokens": 0.00015,
-    "tier": "cloud_cheap"
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "free tier 1500 req/day 15 RPM; lite alternative: gemini-2.5-flash-lite (30 RPM)"
   },
   "openrouter": {
     "type": "openai_compat",
-    "model": "deepseek/deepseek-coder-v2",
+    "model": "google/gemma-4-31b-it:free",
     "base_url": "https://openrouter.ai/api/v1",
     "api_key_env": "OPENROUTER_API_KEY",
-    "cost_per_1k_tokens": 0.0014,
-    "tier": "cloud_cheap"
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "free models have :free suffix; coding alternatives: deepseek/deepseek-v4-flash:free, qwen/qwen3-coder-480b-a35b:free"
   },
   "opencode_zen": {
     "type": "openai_compat",
-    "model": "zen",
-    "base_url": "https://opencode.ai/api/v1",
+    "model": "opencode/claude-sonnet-4-5",
+    "base_url": "https://opencode.ai/zen/v1",
     "api_key_env": "OPENCODE_API_KEY",
-    "cost_per_1k_tokens": 0.002,
+    "cost_per_1k_tokens": 0.0,
     "tier": "cloud_cheap",
-    "_note": "verify base_url at opencode.ai/zen before use"
+    "_note": "model format: opencode/<model-id>; get key at opencode.ai/auth"
   }
 }
