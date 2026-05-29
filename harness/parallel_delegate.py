@@ -1,8 +1,12 @@
 """
-parallel_delegate.py — dispatch multiple independent gemma4 tasks concurrently.
+parallel_delegate.py — dispatch multiple independent tasks concurrently across all providers.
 
-Usage (basic):
+Tasks are distributed across the provider pool (each provider handles one task at a time).
+Fallback and healing happen inside orchestrate() per task.
+
+Usage:
     from harness.parallel_delegate import delegate_parallel
+    from harness.models import SubTask, TaskType
 
     results = delegate_parallel(
         workdir="/path/to/project",
@@ -11,104 +15,100 @@ Usage (basic):
             {"task": "Add type hints to validate_email", "file": "validators.py"},
         ],
     )
-    # → [{"file": "orders.py", "success": True, "output": "...", "healer_strategy": None}, ...]
+    # → [{"file": "orders.py", "success": True, "score": 85, "agent": "gemma4", ...}, ...]
 
-Usage (with per-task auto_heal):
-    from harness.models import SubTask, TaskType
-    results = delegate_parallel(
-        workdir="...",
-        tasks=[...],
-        heal=True,
-        subtasks=[SubTask(...), SubTask(...)],  # same order as tasks
-    )
-
-heal=True runs auto_heal(A→B) on any task that fails to produce code.
-One task's failure does not block others.
-Results returned in input order.
-Only use for truly independent tasks (no shared file dependencies).
+    # With explicit SubTask objects (for richer routing):
+    results = delegate_parallel(workdir=..., tasks=[...], subtasks=[SubTask(...), ...])
 """
-import concurrent.futures
-from pathlib import Path
+from __future__ import annotations
 
-from harness.gemma4_call import run as _gemma4_run
+import concurrent.futures
+import threading
+
+from harness.models import SubTask, TaskType
+from harness.orchestrate import EscalateToClaudeError, orchestrate
+from harness.profiles import load_profiles
+from harness.providers import load_providers
 
 
 def delegate_parallel(
     workdir: str,
     tasks: list[dict],
-    max_workers: int = 3,
+    max_workers: int | None = None,
     diff_mode: bool = False,
-    heal: bool = False,
-    subtasks: list | None = None,
+    heal: bool = True,          # kept for API compat; orchestrate always heals
+    subtasks: list[SubTask] | None = None,
 ) -> list[dict]:
     """
     Args:
-        workdir:    Absolute path to project root.
-        tasks:      List of {"task": str, "file": str}.
-        max_workers: Max concurrent gemma4 calls.
-        diff_mode:  Pass --diff to each call.
-        heal:       If True, run auto_heal(A→B) on tasks that fail to produce code.
-                    Requires `subtasks` (list[SubTask]) in the same order as tasks.
-        subtasks:   SubTask objects matching tasks order, required when heal=True.
+        workdir:     Absolute path to project root.
+        tasks:       List of {"task": str, "file": str}.
+        max_workers: Max concurrent tasks. Defaults to number of available providers.
+        diff_mode:   Pass diff_mode to each orchestrate() call.
+        heal:        Retained for API compatibility. Orchestrate always heals internally.
+        subtasks:    Optional SubTask objects in same order as tasks.
+                     Auto-built from tasks if not provided.
+    Returns:
+        List of result dicts in input order:
+        {"file", "success", "score", "agent", "output", "escalated", "healer_strategy"}
     """
-    pairs = list(zip(tasks, subtasks or ([None] * len(tasks))))
+    providers = load_providers()
+    profiles = load_profiles()
 
-    def _run_one(task: dict, subtask) -> dict:
-        try:
-            response, extracted = _gemma4_run(
-                workdir, task["task"], [task["file"]], diff_mode=diff_mode
+    if subtasks is None:
+        subtasks = [
+            SubTask(
+                id=f"parallel_{i}",
+                description=t["task"],
+                type=TaskType.CODE_EDIT,
+                files=[t["file"]],
+                estimated_tokens=0,
             )
-            result = {
+            for i, t in enumerate(tasks)
+        ]
+
+    busy: set[str] = set()
+    lock = threading.Lock()
+
+    def _run_one(task: dict, subtask: SubTask) -> dict:
+        try:
+            result = orchestrate(
+                subtask, workdir, providers, profiles, diff_mode,
+                _busy=busy, _busy_lock=lock,
+            )
+            return {
                 "file": task["file"],
-                "success": extracted is not None,
-                "output": response,
+                "success": result.score >= 70,
+                "score": result.score,
+                "agent": result.agent,
+                "output": result.details,
+                "escalated": False,
                 "healer_strategy": None,
             }
-            if heal and not result["success"] and subtask is not None:
-                result = _try_heal(task, subtask, result, workdir, diff_mode=diff_mode)
-            return result
+        except EscalateToClaudeError:
+            return {
+                "file": task["file"],
+                "success": False,
+                "score": -1,
+                "agent": "claude_agent",
+                "output": "all providers exhausted — escalated to claude_agent",
+                "escalated": True,
+                "healer_strategy": "C",
+            }
         except Exception as exc:
             return {
                 "file": task["file"],
                 "success": False,
+                "score": -1,
+                "agent": None,
                 "output": str(exc),
+                "escalated": False,
                 "healer_strategy": None,
             }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    n_workers = max_workers if max_workers is not None else max(len(providers), 1)
+    pairs = list(zip(tasks, subtasks))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = [executor.submit(_run_one, t, st) for t, st in pairs]
-        results = []
-        for future, (task, _) in zip(futures, pairs):
-            try:
-                results.append(future.result())
-            except Exception as exc:
-                results.append({
-                    "file": task["file"],
-                    "success": False,
-                    "output": str(exc),
-                    "healer_strategy": None,
-                })
-    return results
-
-
-def _try_heal(task: dict, subtask, base: dict, workdir: str, diff_mode: bool = False) -> dict:
-    """Run auto_heal for a single failed parallel task, honouring diff_mode."""
-    from harness.healer import auto_heal
-    from harness.models import AgentType, EvalResult
-    from harness.profiles import load_profiles
-
-    dummy_result = EvalResult(
-        subtask_id=subtask.id,
-        agent=AgentType.GEMMA4,
-        score=0,
-        syntax_score=0, test_score=0, scope_score=0, semantic_score=0,
-        details="no code block extracted",
-        changed_files=[str(Path(workdir) / task["file"])],
-    )
-    profiles = load_profiles()
-    healed, strategy = auto_heal(subtask, dummy_result, profiles, workdir, diff_mode=diff_mode)
-    base["healer_strategy"] = strategy
-    if healed is not None:
-        base["success"] = True
-        base["output"] = f"healed via strategy {strategy} (score={healed.score})"
-    return base
+        return [f.result() for f in futures]

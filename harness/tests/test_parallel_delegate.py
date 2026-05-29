@@ -1,22 +1,51 @@
+from unittest.mock import MagicMock, patch
+
 from harness.models import SubTask, TaskType, AgentType, EvalResult
+from harness.orchestrate import EscalateToClaudeError
 from harness.parallel_delegate import delegate_parallel
 
 
-def test_preserves_order(tmp_path, monkeypatch):
-    calls = []
+def _mock_result(score=85, agent="gemma4", details="ok"):
+    r = MagicMock()
+    r.score = score
+    r.agent = agent
+    r.details = details
+    return r
 
-    def fake_run(workdir, task, files, diff_mode=False):
-        calls.append(task)
-        return (f"response for {task}", "code block")
 
-    monkeypatch.setattr("harness.parallel_delegate._gemma4_run", fake_run)
+def _make_subtask(sid="p1"):
+    return SubTask(
+        id=sid, description="add docstring",
+        type=TaskType.CODE_EDIT, files=["a.py"], estimated_tokens=500,
+    )
 
+
+def _patch_infra(mock_orchestrate):
+    """Return two patch objects for load_providers and load_profiles."""
+    return (
+        patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}),
+        patch("harness.parallel_delegate.load_profiles", return_value={}),
+    )
+
+
+def test_preserves_order(tmp_path):
     tasks = [
         {"task": "task-A", "file": "a.py"},
         {"task": "task-B", "file": "b.py"},
         {"task": "task-C", "file": "c.py"},
     ]
-    results = delegate_parallel(str(tmp_path), tasks)
+
+    def fake_orchestrate(subtask, workdir, providers, profiles, diff_mode, _busy, _busy_lock):
+        r = MagicMock()
+        r.score = 85
+        r.agent = "gemma4"
+        r.details = f"response for {subtask.description}"
+        return r
+
+    with patch("harness.parallel_delegate.orchestrate", side_effect=fake_orchestrate), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), tasks)
 
     assert len(results) == 3
     assert results[0]["file"] == "a.py"
@@ -24,97 +53,97 @@ def test_preserves_order(tmp_path, monkeypatch):
     assert results[2]["file"] == "c.py"
 
 
-def test_success_flag(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "harness.parallel_delegate._gemma4_run",
-        lambda w, t, f, diff_mode=False: ("resp", "code"),
-    )
-    results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
+def test_success_flag(tmp_path):
+    with patch("harness.parallel_delegate.orchestrate", return_value=_mock_result(score=85)), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
     assert results[0]["success"] is True
 
 
-def test_failure_flag_on_no_code(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "harness.parallel_delegate._gemma4_run",
-        lambda w, t, f, diff_mode=False: ("resp", None),
-    )
-    results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
+def test_failure_flag_on_low_score(tmp_path):
+    with patch("harness.parallel_delegate.orchestrate", return_value=_mock_result(score=60)), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
     assert results[0]["success"] is False
 
 
-def test_exception_captured(tmp_path, monkeypatch):
-    def boom(w, t, f, diff_mode=False):
-        raise RuntimeError("ollama down")
-
-    monkeypatch.setattr("harness.parallel_delegate._gemma4_run", boom)
-    results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
+def test_exception_captured(tmp_path):
+    with patch("harness.parallel_delegate.orchestrate", side_effect=RuntimeError("ollama down")), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
     assert results[0]["success"] is False
     assert "ollama down" in results[0]["output"]
 
 
-def test_healer_strategy_none_on_success(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "harness.parallel_delegate._gemma4_run",
-        lambda w, t, f, diff_mode=False: ("resp", "code"),
-    )
-    results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
+def test_healer_strategy_none_on_success(tmp_path):
+    with patch("harness.parallel_delegate.orchestrate", return_value=_mock_result(score=85)), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "x", "file": "a.py"}])
     assert results[0]["healer_strategy"] is None
 
 
-def _make_subtask():
-    return SubTask(
-        id="p1", description="add docstring",
-        type=TaskType.CODE_EDIT, files=["a.py"], estimated_tokens=500,
-    )
+def test_heal_succeeds(tmp_path):
+    """Orchestrate itself heals — a passing score means heal succeeded."""
+    healed_result = _mock_result(score=80, agent="gemma4", details="healed via strategy A (score=80)")
 
-
-def test_heal_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "harness.parallel_delegate._gemma4_run",
-        lambda w, t, f, diff_mode=False: ("resp", None),  # always fails
-    )
-
-    def fake_auto_heal(subtask, result, profiles, workdir, **kw):
-        healed = EvalResult(
-            subtask_id=subtask.id, agent=AgentType.GEMMA4, score=80,
-            syntax_score=25, test_score=35, scope_score=20, semantic_score=0,
-            details="healed",
+    with patch("harness.parallel_delegate.orchestrate", return_value=healed_result), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(
+            str(tmp_path),
+            [{"task": "add docstring", "file": "a.py"}],
+            heal=True,
+            subtasks=[_make_subtask()],
         )
-        return healed, "A"
-
-    monkeypatch.setattr("harness.parallel_delegate.auto_heal", fake_auto_heal, raising=False)
-
-    # Need to patch _try_heal directly since auto_heal import is inside function
-    from harness import parallel_delegate as pd_mod
-
-    def fake_try_heal(task, subtask, base, workdir, diff_mode=False):
-        base["success"] = True
-        base["healer_strategy"] = "A"
-        base["output"] = "healed via strategy A (score=80)"
-        return base
-
-    monkeypatch.setattr(pd_mod, "_try_heal", fake_try_heal)
-
-    results = delegate_parallel(
-        str(tmp_path),
-        [{"task": "add docstring", "file": "a.py"}],
-        heal=True,
-        subtasks=[_make_subtask()],
-    )
     assert results[0]["success"] is True
-    assert results[0]["healer_strategy"] == "A"
 
 
-def test_heal_requires_subtasks_to_be_passed(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "harness.parallel_delegate._gemma4_run",
-        lambda w, t, f, diff_mode=False: ("resp", None),
-    )
-    # heal=True but no subtasks → success stays False, no crash
-    results = delegate_parallel(
-        str(tmp_path),
-        [{"task": "x", "file": "a.py"}],
-        heal=True,
-        subtasks=None,
-    )
+def test_heal_requires_subtasks_to_be_passed(tmp_path):
+    """heal=True without subtasks: auto-builds them, orchestrate heals internally."""
+    failing_result = _mock_result(score=50, agent="gemma4", details="low score")
+
+    with patch("harness.parallel_delegate.orchestrate", return_value=failing_result), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemma4": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(
+            str(tmp_path),
+            [{"task": "x", "file": "a.py"}],
+            heal=True,
+            subtasks=None,
+        )
     assert results[0]["success"] is False
+
+
+def test_delegate_parallel_returns_score_and_agent(tmp_path):
+    (tmp_path / "a.py").write_text("x=1")
+
+    mock_result = MagicMock()
+    mock_result.score = 82
+    mock_result.agent = "gemini"
+    mock_result.details = "ok"
+
+    with patch("harness.parallel_delegate.orchestrate", return_value=mock_result), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemini": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "add docstring", "file": "a.py"}])
+
+    assert results[0]["score"] == 82
+    assert results[0]["agent"] == "gemini"
+    assert results[0]["success"] is True
+
+
+def test_delegate_parallel_marks_escalated_on_exhaustion(tmp_path):
+    (tmp_path / "a.py").write_text("x=1")
+    st = SubTask("t1", "task", TaskType.CODE_EDIT, ["a.py"], 100)
+
+    with patch("harness.parallel_delegate.orchestrate", side_effect=EscalateToClaudeError(st)), \
+         patch("harness.parallel_delegate.load_providers", return_value={"gemini": MagicMock()}), \
+         patch("harness.parallel_delegate.load_profiles", return_value={}):
+        results = delegate_parallel(str(tmp_path), [{"task": "task", "file": "a.py"}])
+
+    assert results[0]["escalated"] is True
+    assert results[0]["score"] == -1
