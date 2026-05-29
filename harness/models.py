@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
@@ -46,3 +47,4 @@ class CapabilityProfile:
     accuracy_by_type: dict[str, float]
     session_failures: int = 0
     retry_budget: int = 3
+    last_updated: float = field(default_factory=time.time)

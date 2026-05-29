@@ -10,18 +10,19 @@ Claude (orchestrator)
 
 ## How it works
 
-1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy
-2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk
-3. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100
-4. **Healer** fires on score < 70 — presents 3 recovery strategies
-5. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API
+1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy. Auto-estimates tokens from file sizes if not supplied.
+2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk. Supports `--diff` mode for safer targeted edits.
+3. **Parallel delegate** dispatches multiple independent tasks concurrently via `ThreadPoolExecutor`.
+4. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100.
+5. **Healer** auto-tries strategy A (shrink) then B (re-prompt) on score < 70. Only asks the user if both fail (strategy C = escalate).
+6. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API.
+7. **Capability profiles** decay toward neutral across sessions so stale accuracy scores don't mislead the router.
 
 ## Prerequisites
 
 | Tool | Purpose |
 |---|---|
 | [ollama](https://ollama.com) | Runs gemma4 locally |
-| [opencode](https://opencode.ai) | Claude-side AI CLI (optional for smoke test) |
 | Python 3.10+ | Harness runtime |
 | pytest | Test suite |
 
@@ -40,9 +41,8 @@ bash setup.sh
 What it does:
 - Evaluates system specs (RAM, CPU, GPU, disk) and recommends model tier
 - Checks ollama is running with gemma4 pulled
-- Installs `@ai-sdk/openai-compatible` for opencode
 - Writes `~/.claude/CLAUDE.md` so every Claude Code session auto-knows about the harness
-- Runs the full 30-test suite
+- Runs the full test suite
 - Verifies capability profiles are calibrated
 
 After setup, every new Claude Code session automatically loads the routing instructions — **no manual prompt required**.
@@ -61,18 +61,51 @@ python3 -m harness.router '{
   "estimated_tokens": 1500
 }'
 # → gemma4
+
+# estimated_tokens is optional — router auto-estimates from file sizes:
+python3 -m harness.router '{
+  "id": "t1",
+  "description": "Add type hints to validate_order function",
+  "type": "code_edit",
+  "files": ["backend/orders.py"]
+}'
 ```
 
 ### 2. Delegate to gemma4
 
 ```bash
+# Full file rewrite (default)
 bash harness/gemma4_delegate.sh \
   /path/to/your/project \
   "Add type hints to validate_order" \
   backend/orders.py
+
+# Diff mode — safer for large files, applies a unified diff with patch(1)
+bash harness/gemma4_delegate.sh \
+  /path/to/your/project \
+  "Add type hints to validate_order" \
+  backend/orders.py \
+  --diff
 ```
 
-### 3. Evaluate output
+### 3. Delegate multiple files in parallel
+
+```python
+from harness.parallel_delegate import delegate_parallel
+
+results = delegate_parallel(
+    workdir="/path/to/project",
+    tasks=[
+        {"task": "Add docstrings to parse_order",    "file": "orders.py"},
+        {"task": "Add type hints to validate_email", "file": "validators.py"},
+    ],
+)
+# → [{"file": "orders.py", "success": True, "output": "..."}, ...]
+```
+
+Only use for truly independent tasks (no shared file dependencies).
+
+### 4. Evaluate output
 
 ```bash
 python3 -m harness.evaluator '{
@@ -90,9 +123,9 @@ python3 -m harness.evaluator '{
 # → {"score": 78, "details": "syntax=25/25 tests=20/35 scope=20/20 semantic=13/20", ...}
 ```
 
-Score ≥ 70: done. Score < 70: healer shows recovery options.
+Score ≥ 70: done. Score < 70: healer fires automatically (tries A then B before asking for C).
 
-### 4. Session stats
+### 5. Session stats
 
 ```bash
 bash harness/stats.sh
@@ -123,6 +156,8 @@ bash harness/stats.sh
 | gemma4 accuracy < 70% for task type | `claude_agent` |
 | otherwise | `gemma4` |
 
+`estimated_tokens` is auto-derived from file sizes (chars/4) when not supplied.
+
 ## Task types
 
 | Type | Use for |
@@ -135,13 +170,15 @@ bash harness/stats.sh
 
 ## Healer strategies
 
-When evaluator score < 70:
+When evaluator score < 70, the healer runs automatically:
 
-| Strategy | Action | Cost |
-|---|---|---|
-| **A — Shrink** | Halve the file scope, retry gemma4 | Same cost, +~30s |
-| **B — Re-prompt** | Inject failure detail as constraint, retry gemma4 | Same cost, +~30s |
-| **C — Escalate** | Hand to Claude agent, mark gemma4 failure (counts against retry budget) | Higher cost, +~60s |
+| Strategy | Action | Cost | Trigger |
+|---|---|---|---|
+| **A — Shrink** | Halve the file scope, retry gemma4 | Same, +~30s | Auto (first) |
+| **B — Re-prompt** | Inject failure detail as constraint, retry gemma4 | Same, +~30s | Auto (if A fails) |
+| **C — Escalate** | Hand to Claude agent, mark gemma4 failure | Higher, +~60s | Manual (if both fail) |
+
+`auto_heal()` in `harness/healer.py` runs A then B programmatically. If both fail, it returns `(None, "C")` so Claude can decide whether to escalate.
 
 ## Evaluation scoring
 
@@ -156,16 +193,22 @@ Output scored out of 100:
 
 ## Capability profiles
 
-Live in `harness/capability_profiles.json`. Updated by the benchmark and after each real scored run.
+Live in `harness/capability_profiles.json`. Updated after each real scored run. Accuracy decays toward 0.5 (neutral) across sessions if not updated — ~2% per day — so stale calibrations don't over-route to gemma4.
 
-Current benchmarked values (gemma4 via ollama REST API, 2 trials × 5 token sizes × 3 task types):
+### Benchmark results
 
-```
-max_reliable_tokens: 32,000
-accuracy — code_edit:  0.90
-accuracy — code_gen:   0.90
-accuracy — test_write: 0.90
-```
+Benchmarked on Apple M3 Pro (18 GB), gemma4 9B via ollama REST API.  
+30 cells: 5 token sizes × 3 task types × 2 trials.
+
+| Token size | code_edit | code_gen | test_write | avg latency (code_edit) | avg latency (test_write) |
+|---|---|---|---|---|---|
+| 1,000 | 90/100 | 90/100 | 90/100 | 42.5s | 54.0s |
+| 4,000 | 90/100 | 90/100 | 90/100 | 14.3s | 47.9s |
+| 8,000 | 90/100 | 90/100 | 90/100 | 22.0s | 87.2s |
+| 16,000 | 90/100 | 90/100 | 90/100 | 17.9s | 49.7s |
+| 32,000 | 90/100 | 90/100 | 90/100 | 14.0s | 58.5s |
+
+All cells scored 90/100. `max_reliable_tokens` set to 32,000.
 
 ### Recalibrate
 
@@ -173,7 +216,7 @@ accuracy — test_write: 0.90
 python3 gemma4-bench/bench.py   # ~15-30 min
 ```
 
-Benchmarks 30 cells (1k / 4k / 8k / 16k / 32k tokens × code_edit / code_gen / test_write), updates profiles automatically.
+Benchmarks 30 cells, updates `capability_profiles.json` automatically.
 
 ## Session ID
 
@@ -194,13 +237,15 @@ conductor/
 ├── pyproject.toml
 ├── harness/
 │   ├── models.py                   # SubTask, EvalResult, CapabilityProfile dataclasses
-│   ├── router.py                   # routing logic + CLI
+│   ├── router.py                   # routing logic + CLI (auto token estimation)
+│   ├── tokens.py                   # estimate_tokens() from file sizes
 │   ├── evaluator.py                # scoring + CLI
-│   ├── healer.py                   # failure recovery strategy builder
-│   ├── profiles.py                 # load/save/update capability_profiles.json
+│   ├── healer.py                   # failure recovery — auto A→B, manual C
+│   ├── parallel_delegate.py        # concurrent multi-task delegation
+│   ├── profiles.py                 # load/save/update + cross-session decay
 │   ├── session_stats.py            # SQLite delegation log + report
-│   ├── gemma4_delegate.sh          # thin bash wrapper
-│   ├── gemma4_call.py              # ollama REST API caller
+│   ├── gemma4_delegate.sh          # thin bash wrapper (supports --diff)
+│   ├── gemma4_call.py              # ollama REST API caller (importable run())
 │   ├── stats.sh                    # stats report CLI
 │   ├── capability_profiles.json    # live gemma4 thresholds
 │   └── tests/
@@ -209,9 +254,12 @@ conductor/
 │       ├── test_router.py
 │       ├── test_evaluator.py
 │       ├── test_healer.py
-│       └── test_session_stats.py
+│       ├── test_session_stats.py
+│       ├── test_tokens.py
+│       └── test_parallel_delegate.py
 └── gemma4-bench/
-    └── bench.py                    # calibration benchmark
+    ├── bench.py                    # calibration benchmark
+    └── bench_results.json          # latest benchmark results
 ```
 
 ## Development
@@ -235,4 +283,12 @@ python3 gemma4-bench/bench.py
 
 **Semantic scoring reads file content for short outputs** — when output is a summary string (< 30 words), evaluator reads the actual changed file and takes the max overlap score vs the description.
 
-**Rolling accuracy update** — each evaluated run updates `accuracy_by_type` as: `current × 0.7 + (score/100) × 0.3`. Decays toward real performance without overreacting to single failures.
+**Rolling accuracy update** — each evaluated run updates `accuracy_by_type` as: `current × 0.7 + (score/100) × 0.3`. Decays toward neutral across sessions to prevent stale high scores from misleading the router.
+
+**Diff mode for large files** — `--diff` flag asks gemma4 for a unified diff instead of full file output, reducing hallucination risk on large context. Applied with `patch(1)`.
+
+**Parallel delegation** — `delegate_parallel()` uses `ThreadPoolExecutor` for independent tasks. Results returned in input order. Exceptions caught per-task — one failure doesn't block others.
+
+**Healer auto-apply** — `auto_heal()` runs strategy A (shrink) then B (re-prompt) automatically before surfacing strategy C (escalate) to the user. Keeps the human out of the loop for recoverable failures.
+
+**Token auto-estimation** — if `estimated_tokens` is 0 or omitted in router CLI, it's computed from file sizes (chars/4). Removes a manual step that users often guess wrong.

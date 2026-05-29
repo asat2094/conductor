@@ -28,9 +28,15 @@ if __name__ == "__main__":
     from pathlib import Path
     from harness.profiles import load_profiles
     from harness.session_stats import log_delegation
+    from harness.tokens import estimate_tokens
 
     subtask_data = json.loads(sys.argv[1])
     subtask_data["type"] = TaskType(subtask_data["type"])
+    if not subtask_data.get("estimated_tokens"):
+        subtask_data["estimated_tokens"] = estimate_tokens(
+            subtask_data.get("files", []),
+            subtask_data.get("workdir", "."),
+        )
     subtask = SubTask(**subtask_data)
     profiles = load_profiles()
     agent = route(subtask, profiles)
