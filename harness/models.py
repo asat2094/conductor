@@ -31,7 +31,7 @@ class SubTask:
 @dataclass
 class EvalResult:
     subtask_id: str
-    agent: AgentType
+    agent: str          # was AgentType — widened to str; AgentType values still work
     score: int
     syntax_score: int
     test_score: int
@@ -49,3 +49,14 @@ class CapabilityProfile:
     retry_budget: int = 3
     last_updated: float = field(default_factory=time.time)
     decay_per_day: float = 0.98  # accuracy drifts this fraction per day toward 0.5
+
+
+@dataclass
+class ProviderConfig:
+    name: str
+    type: str           # "ollama" | "openai_compat"
+    model: str
+    base_url: str
+    cost_per_1k_tokens: float
+    tier: str
+    api_key_env: str = ""

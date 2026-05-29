@@ -1,0 +1,50 @@
+{
+  "gemma4": {
+    "type": "ollama",
+    "model": "gemma4:latest",
+    "base_url": "http://localhost:11434",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "local"
+  },
+  "deepseek": {
+    "type": "openai_compat",
+    "model": "deepseek-coder",
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "cost_per_1k_tokens": 0.0014,
+    "tier": "cloud_cheap"
+  },
+  "nim": {
+    "type": "openai_compat",
+    "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+    "base_url": "https://integrate.api.nvidia.com/v1",
+    "api_key_env": "NIM_API_KEY",
+    "cost_per_1k_tokens": 0.001,
+    "tier": "cloud_cheap"
+  },
+  "gemini": {
+    "type": "openai_compat",
+    "model": "gemini-2.0-flash",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_key_env": "GEMINI_API_KEY",
+    "cost_per_1k_tokens": 0.00015,
+    "tier": "cloud_cheap"
+  },
+  "openrouter": {
+    "type": "openai_compat",
+    "model": "deepseek/deepseek-coder-v2",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "cost_per_1k_tokens": 0.0014,
+    "tier": "cloud_cheap"
+  },
+  "opencode_zen": {
+    "type": "openai_compat",
+    "model": "zen",
+    "base_url": "https://opencode.ai/api/v1",
+    "api_key_env": "OPENCODE_API_KEY",
+    "cost_per_1k_tokens": 0.002,
+    "tier": "cloud_cheap",
+    "_note": "verify base_url at opencode.ai/zen before use"
+  }
+}
