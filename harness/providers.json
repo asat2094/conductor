@@ -42,13 +42,22 @@
     "tier": "cloud_cheap",
     "_note": "free models have :free suffix; coding alternatives: deepseek/deepseek-v4-flash:free, qwen/qwen3-coder-480b-a35b:free"
   },
-  "opencode_zen": {
+  "opencode_deepseek": {
     "type": "openai_compat",
-    "model": "opencode/claude-sonnet-4-5",
+    "model": "deepseek-v4-flash-free",
     "base_url": "https://opencode.ai/zen/v1",
     "api_key_env": "OPENCODE_API_KEY",
     "cost_per_1k_tokens": 0.0,
     "tier": "cloud_cheap",
-    "_note": "model format: opencode/<model-id>; get key at opencode.ai/auth"
+    "_note": "DeepSeek V4 Flash free via OpenCode Zen; reasoning model needs enough token budget"
+  },
+  "opencode_mimo": {
+    "type": "openai_compat",
+    "model": "mimo-v2.5-free",
+    "base_url": "https://opencode.ai/zen/v1",
+    "api_key_env": "OPENCODE_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "Xiaomi MiMo V2.5 free via OpenCode Zen (minimax-m2.5-free promo ended)"
   }
 }
