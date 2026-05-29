@@ -217,17 +217,17 @@ Two layers:
 
 ## Test suite
 
-47 tests across 8 files, all passing:
+57 tests across 8 files, all passing:
 
 ```
 harness/tests/test_models.py           — dataclass defaults, enum values
-harness/tests/test_profiles.py         — load/save/update_accuracy rolling avg, decay, last_updated
+harness/tests/test_profiles.py         — load/save/update_accuracy, decay, last_updated, decay_per_day
 harness/tests/test_router.py           — all 5 routing rules
 harness/tests/test_evaluator.py        — syntax/tests/scope/semantic checks
 harness/tests/test_healer.py           — A/B/C strategy, auto_heal A→B→C
 harness/tests/test_session_stats.py    — log/update/report, empty db, print
-harness/tests/test_tokens.py           — estimate_tokens empty/missing/existing/multiple
-harness/tests/test_parallel_delegate.py — order preservation, success flag, exception capture
+harness/tests/test_tokens.py           — estimate_tokens empty/missing/existing/multiple/per-extension
+harness/tests/test_parallel_delegate.py — order, success flag, exception, heal=True, heal requires subtasks
 ```
 
 Run: `/opt/homebrew/bin/pytest -q`
@@ -299,14 +299,21 @@ bash harness/stats.sh <session_id>   # single session
 
 ## What's NOT done / future ideas
 
-- **README benchmark section** — ✅ done (added bench_results table)
-- **Parallel delegation** — ✅ done (`harness/parallel_delegate.py`)
-- **Diff-mode output** — ✅ done (`--diff` flag in `gemma4_call.py`)
-- **Auto token counting** — ✅ done (`harness/tokens.py`, wired into router CLI)
-- **Healer auto-apply** — ✅ done (`auto_heal()` in `harness/healer.py`)
-- **Cross-session accuracy decay** — ✅ done (`profiles.py` load applies decay)
-- **Healer auto-apply in evaluator CLI** — evaluator CLI calls `update_score()` but does NOT call `auto_heal()`; Claude does that manually. Could wire auto_heal into evaluator `__main__` as optional `--auto-heal` flag.
-- **Diff mode fallback** — if `patch(1)` not installed, diff mode silently fails. Could fall back to full rewrite.
-- **Token counting for non-Python files** — `estimate_tokens()` reads any file but chars/4 is less accurate for JSON/YAML/markdown. Could add per-extension multipliers.
-- **Parallel + auto_heal** — `delegate_parallel()` doesn't call healer on individual failures. Could add per-task healing loop.
-- **Cross-session accuracy decay** — decay rate (0.98/day) is a constant. Could expose as a profile field.
+**All previously listed items complete:**
+- ✅ README benchmark section
+- ✅ Parallel delegation (`harness/parallel_delegate.py`)
+- ✅ Diff-mode output (`--diff` + fallback to full rewrite)
+- ✅ Auto token counting (`harness/tokens.py` with per-extension multipliers)
+- ✅ Healer auto-apply (`auto_heal()` A→B→C)
+- ✅ `--auto-heal` flag in evaluator CLI (exit 2 on C)
+- ✅ Diff mode fallback (re-calls gemma4 in full-rewrite mode if patch fails)
+- ✅ Per-extension token multipliers (JSON 1.4×, YAML 1.2×, markdown 0.8×, etc.)
+- ✅ Per-task auto_heal in `delegate_parallel()` (`heal=True` + `subtasks=` param)
+- ✅ Decay rate as `CapabilityProfile.decay_per_day` field (default 0.98, JSON-serializable)
+
+**Remaining future ideas:**
+- **Evaluator `--workdir` param** — currently `workdir` in evaluator JSON is used for auto_heal but not for file reads; could unify.
+- **Bench results decay** — benchmark sets accuracy to fixed values, overwriting any real-session decay. Consider merging rather than overwriting.
+- **gemma4_delegate.sh parallel mode** — bash wrapper only supports single file; could add `--parallel` for shell-level multi-dispatch.
+- **`heal=True` parallel + diff** — `_try_heal` always uses full-rewrite (ignores `diff_mode`); could propagate.
+- **`--auto-heal` in router** — router doesn't evaluate; could add end-to-end `route+delegate+eval+heal` single command.

@@ -6,8 +6,9 @@ Reads files from workdir, builds prompt, calls gemma4 via ollama REST API,
 extracts first fenced code block (or unified diff in --diff mode), writes to file1.
 Prints full response to stdout. Logs status to stderr.
 
---diff: asks gemma4 for a unified diff instead of full file; applies with `patch`.
-        Falls back to error if patch application fails.
+--diff: asks gemma4 for a unified diff instead of full file; applies with `patch(1)`.
+        If patch(1) is missing or the diff apply fails, automatically falls back to
+        a full file rewrite (re-calls gemma4 without --diff). A warning is logged.
 """
 import json
 import re
@@ -98,14 +99,16 @@ def run(workdir: str, task: str, files: list[str], diff_mode: bool = False) -> t
 
     if diff_mode and target_exists:
         diff = extract_diff_block(response)
-        if not diff:
-            print("\n[gemma4] WARNING: no diff block in response — file not modified.", file=sys.stderr)
-            return response, None
-        if not apply_patch(diff, target):
-            print("\n[gemma4] WARNING: patch apply failed — file not modified.", file=sys.stderr)
-            return response, None
-        print(f"[gemma4] Patch applied to {target}", file=sys.stderr)
-        return response, diff
+        if diff and apply_patch(diff, target):
+            print(f"[gemma4] Patch applied to {target}", file=sys.stderr)
+            return response, diff
+        # Fallback: patch unavailable or failed — retry as full rewrite
+        print(
+            "\n[gemma4] WARNING: diff mode failed (patch missing or bad diff) — "
+            "falling back to full rewrite.",
+            file=sys.stderr,
+        )
+        return run(workdir, task, files, diff_mode=False)
 
     code = extract_code_block(response)
     if not code:

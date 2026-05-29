@@ -75,3 +75,51 @@ def test_missing_last_updated_in_json(tmp_path):
     path = _write_tmp_profiles(tmp_path)  # no last_updated in JSON
     profiles = profiles_mod.load_profiles(path)
     assert profiles["gemma4"].last_updated > 0  # gets defaulted to now
+
+
+def test_decay_per_day_default(tmp_path):
+    path = _write_tmp_profiles(tmp_path)
+    profiles = profiles_mod.load_profiles(path)
+    assert profiles["gemma4"].decay_per_day == 0.98
+
+
+def test_custom_decay_per_day_in_json(tmp_path):
+    data = {
+        "gemma4": {
+            "max_reliable_tokens": 8000,
+            "accuracy_by_type": {"code_edit": 0.80},
+            "session_failures": 0,
+            "retry_budget": 3,
+            "decay_per_day": 0.95,
+        }
+    }
+    p = tmp_path / "capability_profiles.json"
+    p.write_text(json.dumps(data))
+    profiles = profiles_mod.load_profiles(p)
+    assert profiles["gemma4"].decay_per_day == 0.95
+
+
+def test_custom_decay_per_day_applied(tmp_path):
+    stale_ts = time.time() - 10 * 86400  # 10 days ago
+    data = {
+        "gemma4": {
+            "max_reliable_tokens": 8000,
+            "accuracy_by_type": {"code_edit": 0.80},
+            "session_failures": 0,
+            "retry_budget": 3,
+            "last_updated": stale_ts,
+            "decay_per_day": 0.80,  # aggressive decay
+        }
+    }
+    p = tmp_path / "capability_profiles.json"
+    p.write_text(json.dumps(data))
+    profiles = profiles_mod.load_profiles(p)
+    accuracy_fast = profiles["gemma4"].accuracy_by_type["code_edit"]
+
+    # Same profile but slow decay
+    data["gemma4"]["decay_per_day"] = 0.99
+    p.write_text(json.dumps(data))
+    profiles_slow = profiles_mod.load_profiles(p)
+    accuracy_slow = profiles_slow["gemma4"].accuracy_by_type["code_edit"]
+
+    assert accuracy_fast < accuracy_slow  # faster decay → lower accuracy

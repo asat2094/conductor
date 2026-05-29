@@ -48,3 +48,4 @@ class CapabilityProfile:
     session_failures: int = 0
     retry_budget: int = 3
     last_updated: float = field(default_factory=time.time)
+    decay_per_day: float = 0.98  # accuracy drifts this fraction per day toward 0.5

@@ -10,13 +10,13 @@ Claude (orchestrator)
 
 ## How it works
 
-1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy. Auto-estimates tokens from file sizes if not supplied.
-2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk. Supports `--diff` mode for safer targeted edits.
-3. **Parallel delegate** dispatches multiple independent tasks concurrently via `ThreadPoolExecutor`.
-4. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100.
-5. **Healer** auto-tries strategy A (shrink) then B (re-prompt) on score < 70. Only asks the user if both fail (strategy C = escalate).
+1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy. Auto-estimates tokens from file sizes (with per-extension multipliers) if not supplied.
+2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk. Supports `--diff` mode (applies unified diff via `patch(1)`; auto-falls back to full rewrite if patch unavailable).
+3. **Parallel delegate** dispatches multiple independent tasks concurrently via `ThreadPoolExecutor`. Optionally runs per-task `auto_heal` on failures.
+4. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100. `--auto-heal` flag runs A→B automatically and returns the best result.
+5. **Healer** auto-tries strategy A (shrink) then B (re-prompt) on score < 70. Only surfaces strategy C (escalate) if both fail.
 6. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API.
-7. **Capability profiles** decay toward neutral across sessions so stale accuracy scores don't mislead the router.
+7. **Capability profiles** decay toward neutral across sessions. Decay rate is configurable per-profile (`decay_per_day`, default 0.98).
 
 ## Prerequisites
 
@@ -108,6 +108,7 @@ Only use for truly independent tasks (no shared file dependencies).
 ### 4. Evaluate output
 
 ```bash
+# Basic evaluation
 python3 -m harness.evaluator '{
   "subtask": {
     "id": "t1",
@@ -121,9 +122,15 @@ python3 -m harness.evaluator '{
   "output": "Written successfully"
 }'
 # → {"score": 78, "details": "syntax=25/25 tests=20/35 scope=20/20 semantic=13/20", ...}
+
+# With automatic healing on score < 70
+python3 -m harness.evaluator '{...}' --auto-heal
+# If score < 70: tries strategy A then B automatically.
+# Returns best result with "healer_strategy": "A"|"B"|"C".
+# Exit code 2 if both fail (caller should escalate to claude_agent).
 ```
 
-Score ≥ 70: done. Score < 70: healer fires automatically (tries A then B before asking for C).
+Score ≥ 70: done. Score < 70 with `--auto-heal`: healer runs A→B automatically before surfacing C.
 
 ### 5. Session stats
 

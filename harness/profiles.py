@@ -4,20 +4,17 @@ from pathlib import Path
 from harness.models import CapabilityProfile
 
 _DEFAULT_PATH = Path(__file__).parent / "capability_profiles.json"
-
-# Accuracy drifts ~2% per day toward 0.5 (neutral) when not updated.
-# After 30 days of no runs, a 0.9 score decays to ~0.87.
-_DECAY_PER_DAY = 0.98
 _NEUTRAL = 0.5
 
 
 def apply_decay(profiles: dict[str, CapabilityProfile]) -> None:
+    """Decay accuracy toward neutral using each profile's own decay_per_day rate."""
     now = time.time()
     for profile in profiles.values():
         days = (now - profile.last_updated) / 86400
         if days < 1:
             continue
-        factor = _DECAY_PER_DAY ** days
+        factor = profile.decay_per_day ** days
         profile.accuracy_by_type = {
             k: round(_NEUTRAL + (v - _NEUTRAL) * factor, 3)
             for k, v in profile.accuracy_by_type.items()
