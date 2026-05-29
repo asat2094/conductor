@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+import re
 import threading
+import time
 from pathlib import Path
 
 from harness.evaluator import evaluate
@@ -27,6 +29,26 @@ from harness.session_stats import log_delegation, update_score
 from harness.tokens import estimate_tokens
 
 _SESSION_ID = os.environ.get("CONDUCTOR_SESSION_ID", "default")
+
+# Per-model rate limit tracker: provider_name → earliest next-allowed timestamp
+_rate_limit_until: dict[str, float] = {}
+_rl_lock = threading.Lock()
+
+
+def _set_rate_limit(provider_name: str, error_msg: str, default_secs: int = 60) -> None:
+    """Parse retry-after from error message and record cooldown for provider."""
+    secs = default_secs
+    m = re.search(r"retry.after[_\s]*(\d+(?:\.\d+)?)", str(error_msg), re.IGNORECASE)
+    if m:
+        secs = int(float(m.group(1))) + 2
+    with _rl_lock:
+        _rate_limit_until[provider_name] = time.time() + secs
+    print(f"[orchestrate] {provider_name} rate-limited, cooldown {secs}s", flush=True)
+
+
+def _is_rate_limited(provider_name: str) -> bool:
+    with _rl_lock:
+        return time.time() < _rate_limit_until.get(provider_name, 0)
 
 
 class EscalateToClaudeError(Exception):
@@ -81,6 +103,11 @@ def orchestrate(
         if provider_name == "claude_agent":
             raise EscalateToClaudeError(subtask)
 
+        # Skip providers still in rate-limit cooldown
+        if _is_rate_limited(provider_name):
+            print(f"[orchestrate] skipping {provider_name} (rate-limit cooldown)", flush=True)
+            continue
+
         with lock:
             busy.add(provider_name)
 
@@ -89,7 +116,10 @@ def orchestrate(
                 providers[provider_name], workdir, subtask.description, subtask.files,
                 diff_mode=diff_mode,
             )
-        except (RateLimitError, ProviderError):
+        except RateLimitError as e:
+            _set_rate_limit(provider_name, str(e))
+            continue
+        except ProviderError:
             continue
         finally:
             with lock:

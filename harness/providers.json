@@ -35,12 +35,21 @@
   },
   "openrouter": {
     "type": "openai_compat",
-    "model": "google/gemma-4-31b-it:free",
+    "model": "qwen/qwen3-coder:free",
     "base_url": "https://openrouter.ai/api/v1",
     "api_key_env": "OPENROUTER_API_KEY",
     "cost_per_1k_tokens": 0.0,
     "tier": "cloud_cheap",
-    "_note": "free models have :free suffix; coding alternatives: deepseek/deepseek-v4-flash:free, qwen/qwen3-coder-480b-a35b:free"
+    "_note": "Qwen3-Coder-480B MoE, SOTA free coding model, 1M context"
+  },
+  "openrouter_poolside": {
+    "type": "openai_compat",
+    "model": "poolside/laguna-m.1:free",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "Poolside Laguna M.1 — dedicated coding agent model, free, 262k ctx"
   },
   "opencode_deepseek": {
     "type": "openai_compat",

@@ -73,6 +73,17 @@
     "last_updated": 1780079585.151191,
     "decay_per_day": 0.98
   },
+  "openrouter_poolside": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
   "opencode_deepseek": {
     "max_reliable_tokens": 32000,
     "accuracy_by_type": {

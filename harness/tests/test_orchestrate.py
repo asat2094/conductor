@@ -6,6 +6,14 @@ import pytest
 from harness.models import (
     AgentType, CapabilityProfile, EvalResult, ProviderConfig, SubTask, TaskType,
 )
+import harness.orchestrate as _orch_mod
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limits():
+    _orch_mod._rate_limit_until.clear()
+    yield
+    _orch_mod._rate_limit_until.clear()
 
 
 def _subtask(tokens=100):
