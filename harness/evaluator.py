@@ -119,9 +119,15 @@ if __name__ == "__main__":
     st["type"] = TaskType(st["type"])
     subtask = SubTask(**st)
     agent = AgentType(data["agent"])
-    changed = data["changed_files"]
-    output = data["output"]
     workdir = data.get("workdir", ".")
+    output = data.get("output", "")
+
+    # changed_files optional: derive from workdir + subtask.files if not supplied
+    if "changed_files" in data:
+        changed = data["changed_files"]
+    else:
+        from pathlib import Path
+        changed = [str(Path(workdir) / f) for f in subtask.files]
 
     result = evaluate(subtask, agent, changed, output)
     update_score(subtask.id, result.score)

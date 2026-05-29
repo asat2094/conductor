@@ -165,15 +165,28 @@ def derive_thresholds(results: dict) -> dict:
 
 
 def update_profiles(thresholds: dict) -> None:
-    profiles = json.loads(PROFILES_PATH.read_text())
+    """
+    Merge bench results into live profiles using rolling average — does NOT hard-overwrite.
+    Preserves decay_per_day, last_updated, retry_budget, and any accumulated real-session accuracy.
+    max_reliable_tokens is set to the min passing token size (hard threshold, bench-authoritative).
+    """
+    import sys
+    sys.path.insert(0, str(HARNESS_DIR.parent))
+    from harness.profiles import load_profiles, save_profiles, update_accuracy
+
+    profiles = load_profiles(PROFILES_PATH)
     gemma = profiles["gemma4"]
+
     token_limits = [v["max_reliable_tokens"] for v in thresholds.values()]
-    gemma["max_reliable_tokens"] = min(token_limits) if token_limits else 8000
+    gemma.max_reliable_tokens = min(token_limits) if token_limits else 8000
+    gemma.session_failures = 0  # reset after fresh calibration
+
     for task_type, data in thresholds.items():
-        gemma["accuracy_by_type"][task_type] = data["accuracy"]
-    gemma["session_failures"] = 0
-    PROFILES_PATH.write_text(json.dumps(profiles, indent=2))
-    print(f"\nUpdated {PROFILES_PATH}")
+        bench_score = int(data["accuracy"] * 100)
+        update_accuracy(profiles, "gemma4", task_type, bench_score)
+
+    save_profiles(profiles, PROFILES_PATH)
+    print(f"\nUpdated {PROFILES_PATH} (merged via rolling avg)")
 
 
 def main():

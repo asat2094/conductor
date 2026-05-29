@@ -122,3 +122,33 @@ def test_auto_heal_escalates_on_no_code():
     )
     assert strategy == "C"
     assert new_result is None
+
+
+def test_auto_heal_propagates_diff_mode():
+    """delegate_fn receives diff_mode=True when auto_heal is called with diff_mode=True."""
+    received_modes = []
+
+    def capturing_delegate(w, t, f, diff_mode=False):
+        received_modes.append(diff_mode)
+        return ("resp", "code")
+
+    auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=capturing_delegate, evaluate_fn=_good_eval,
+        diff_mode=True,
+    )
+    assert all(m is True for m in received_modes), f"Expected all True, got {received_modes}"
+
+
+def test_auto_heal_diff_mode_false_by_default():
+    received_modes = []
+
+    def capturing_delegate(w, t, f, diff_mode=False):
+        received_modes.append(diff_mode)
+        return ("resp", "code")
+
+    auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=capturing_delegate, evaluate_fn=_good_eval,
+    )
+    assert all(m is False for m in received_modes)

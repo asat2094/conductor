@@ -57,6 +57,7 @@ def auto_heal(
     workdir: str,
     delegate_fn=None,
     evaluate_fn=None,
+    diff_mode: bool = False,
 ) -> tuple[EvalResult | None, str]:
     """
     Automatically try strategy A (shrink) then B (re-prompt) before giving up.
@@ -64,20 +65,25 @@ def auto_heal(
     Returns (new_result, strategy) where strategy is "A", "B", or "C".
     "C" means both auto strategies failed — caller should escalate to claude_agent.
 
-    delegate_fn(workdir, task, files) → (response, code|None)
+    delegate_fn(workdir, task, files, diff_mode) → (response, code|None)
     evaluate_fn(subtask, agent, changed_files, output) → EvalResult
+    diff_mode: passed through to delegate so healing calls honour the same mode.
     """
+    from pathlib import Path
     from harness.gemma4_call import run as _default_delegate
     from harness.evaluator import evaluate as _default_evaluate
 
-    _delegate = delegate_fn or _default_delegate
     _evaluate = evaluate_fn or _default_evaluate
+
+    def _delegate(w, task, files):
+        fn = delegate_fn or _default_delegate
+        return fn(w, task, files, diff_mode=diff_mode)
 
     # Strategy A: shrink scope
     shrunk = apply_shrink(subtask)
     response_a, code_a = _delegate(workdir, shrunk.description, shrunk.files)
     if code_a is not None:
-        changed_a = [str(__import__("pathlib").Path(workdir) / f) for f in shrunk.files]
+        changed_a = [str(Path(workdir) / f) for f in shrunk.files]
         result_a = _evaluate(shrunk, AgentType.GEMMA4, changed_a, response_a)
         if result_a.score >= 70:
             return result_a, "A"
@@ -86,7 +92,7 @@ def auto_heal(
     reprompted = apply_reprompt(subtask, result.details)
     response_b, code_b = _delegate(workdir, reprompted.description, reprompted.files)
     if code_b is not None:
-        changed_b = [str(__import__("pathlib").Path(workdir) / f) for f in reprompted.files]
+        changed_b = [str(Path(workdir) / f) for f in reprompted.files]
         result_b = _evaluate(reprompted, AgentType.GEMMA4, changed_b, response_b)
         if result_b.score >= 70:
             return result_b, "B"

@@ -12,11 +12,12 @@ Claude (orchestrator)
 
 1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy. Auto-estimates tokens from file sizes (with per-extension multipliers) if not supplied.
 2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk. Supports `--diff` mode (applies unified diff via `patch(1)`; auto-falls back to full rewrite if patch unavailable).
-3. **Parallel delegate** dispatches multiple independent tasks concurrently via `ThreadPoolExecutor`. Optionally runs per-task `auto_heal` on failures.
-4. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100. `--auto-heal` flag runs A→B automatically and returns the best result.
-5. **Healer** auto-tries strategy A (shrink) then B (re-prompt) on score < 70. Only surfaces strategy C (escalate) if both fail.
-6. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API.
-7. **Capability profiles** decay toward neutral across sessions. Decay rate is configurable per-profile (`decay_per_day`, default 0.98).
+3. **Parallel delegate** dispatches multiple independent tasks concurrently via `ThreadPoolExecutor`. Optionally runs per-task `auto_heal` on failures. `diff_mode` propagates to heal calls.
+4. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100. `--auto-heal` flag runs A→B automatically. `changed_files` auto-derived from `workdir+subtask.files` if not supplied.
+5. **Healer** auto-tries strategy A (shrink) then B (re-prompt) on score < 70. `diff_mode` propagates so healing calls honour the same mode. Only surfaces strategy C (escalate) if both fail.
+6. **Pipeline** (`harness/pipeline.py`) — single command runs the full route→delegate→evaluate→heal loop. CLI: `python3 -m harness.pipeline`.
+7. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API.
+8. **Capability profiles** decay toward neutral across sessions. Decay rate configurable per-profile (`decay_per_day`, default 0.98). Benchmark merges via rolling avg — real-session scores survive recalibration.
 
 ## Prerequisites
 
@@ -132,7 +133,25 @@ python3 -m harness.evaluator '{...}' --auto-heal
 
 Score ≥ 70: done. Score < 70 with `--auto-heal`: healer runs A→B automatically before surfacing C.
 
-### 5. Session stats
+### 5. End-to-end pipeline (single command)
+
+```bash
+# route + delegate + evaluate + auto_heal in one shot
+python3 -m harness.pipeline '{
+  "id": "t1",
+  "description": "Add docstring to validate_order",
+  "type": "code_edit",
+  "files": ["backend/orders.py"]
+}' --workdir /path/to/project
+
+# With diff mode and no auto-healing
+python3 -m harness.pipeline '{...}' --workdir /path --diff --no-heal
+```
+
+Output: JSON with `agent_used`, `final_score`, `strategy`, `routed_to_claude`, `eval`.  
+Exit codes: `0` = done, `1` = routed to claude_agent, `2` = strategy C (escalate).
+
+### 6. Session stats
 
 ```bash
 bash harness/stats.sh

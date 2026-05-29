@@ -65,7 +65,7 @@ def delegate_parallel(
                 "healer_strategy": None,
             }
             if heal and not result["success"] and subtask is not None:
-                result = _try_heal(task, subtask, result, workdir)
+                result = _try_heal(task, subtask, result, workdir, diff_mode=diff_mode)
             return result
         except Exception as exc:
             return {
@@ -91,8 +91,8 @@ def delegate_parallel(
     return results
 
 
-def _try_heal(task: dict, subtask, base: dict, workdir: str) -> dict:
-    """Run auto_heal for a single failed parallel task."""
+def _try_heal(task: dict, subtask, base: dict, workdir: str, diff_mode: bool = False) -> dict:
+    """Run auto_heal for a single failed parallel task, honouring diff_mode."""
     from harness.healer import auto_heal
     from harness.models import AgentType, EvalResult
     from harness.profiles import load_profiles
@@ -106,7 +106,7 @@ def _try_heal(task: dict, subtask, base: dict, workdir: str) -> dict:
         changed_files=[str(Path(workdir) / task["file"])],
     )
     profiles = load_profiles()
-    healed, strategy = auto_heal(subtask, dummy_result, profiles, workdir)
+    healed, strategy = auto_heal(subtask, dummy_result, profiles, workdir, diff_mode=diff_mode)
     base["healer_strategy"] = strategy
     if healed is not None:
         base["success"] = True

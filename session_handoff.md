@@ -35,19 +35,21 @@ Claude (orchestrator)
 
 | File | Role |
 |---|---|
-| `harness/models.py` | Dataclasses: SubTask, EvalResult, CapabilityProfile (has last_updated); Enums: TaskType, AgentType |
+| `harness/models.py` | Dataclasses: SubTask, EvalResult, CapabilityProfile (last_updated, decay_per_day); Enums |
+| `harness/pipeline.py` | `run_pipeline(subtask, workdir, diff_mode, auto_heal)` — full loop; `python3 -m harness.pipeline` |
 | `harness/router.py` | 5-rule routing logic + CLI; auto-estimates tokens from file sizes |
-| `harness/tokens.py` | `estimate_tokens(files, workdir)` — chars/4 approximation |
-| `harness/evaluator.py` | 4-axis scoring (syntax/tests/scope/semantic) + CLI |
-| `harness/healer.py` | `build_healer_report()`, `apply_shrink()`, `apply_reprompt()`, `auto_heal()` |
-| `harness/parallel_delegate.py` | `delegate_parallel(workdir, tasks, max_workers)` via ThreadPoolExecutor |
-| `harness/profiles.py` | `load_profiles()` (applies cross-session decay), `save_profiles()`, `update_accuracy()` (rolling avg + sets last_updated) |
-| `harness/gemma4_delegate.sh` | Thin bash wrapper → calls `gemma4_call.py` (passes --diff through) |
-| `harness/gemma4_call.py` | Importable `run(workdir, task, files, diff_mode)` + CLI; --diff applies unified diff via patch(1) |
-| `harness/session_stats.py` | SQLite log of every delegation; `log_delegation()`, `update_score()`, `print_report()` |
+| `harness/tokens.py` | `estimate_tokens(files, workdir)` — chars/4 with per-extension multipliers |
+| `harness/evaluator.py` | 4-axis scoring + CLI; `--auto-heal`; derives changed_files from workdir if missing |
+| `harness/healer.py` | `auto_heal(diff_mode=)` — A→B→C; diff_mode propagated to delegate calls |
+| `harness/parallel_delegate.py` | `delegate_parallel(workdir, tasks, heal, diff_mode, subtasks)` via ThreadPoolExecutor |
+| `harness/parallel_cli.py` | `python3 -m harness.parallel_cli <workdir> <tasks_json>` — bash-friendly parallel dispatch |
+| `harness/profiles.py` | `load_profiles()` (applies decay via profile.decay_per_day), `save_profiles()`, `update_accuracy()` |
+| `harness/gemma4_delegate.sh` | Bash wrapper; `--parallel` routes to `parallel_cli.py`; `--diff` passes through |
+| `harness/gemma4_call.py` | Importable `run(workdir, task, files, diff_mode)` + CLI; diff fallback to full rewrite |
+| `harness/session_stats.py` | SQLite log; `log_delegation()`, `update_score()`, `print_report()` |
 | `harness/stats.sh` | CLI wrapper for `session_stats.py` |
-| `harness/capability_profiles.json` | Live gemma4 thresholds (updated by bench + evaluator) |
-| `gemma4-bench/bench.py` | Calibration benchmark: 5 token sizes × 3 task types × 2 trials |
+| `harness/capability_profiles.json` | Live gemma4 thresholds (includes decay_per_day) |
+| `gemma4-bench/bench.py` | Calibration benchmark; merges via rolling avg — preserves real-session accuracy |
 | `gemma4-bench/bench_results.json` | Latest benchmark results |
 | `setup.sh` | Idempotent one-shot setup; writes `~/.claude/CLAUDE.md` |
 | `CLAUDE.md` | Auto-read by Claude Code when CWD is this repo |
@@ -217,17 +219,19 @@ Two layers:
 
 ## Test suite
 
-57 tests across 8 files, all passing:
+68 tests across 10 files, all passing:
 
 ```
-harness/tests/test_models.py           — dataclass defaults, enum values
-harness/tests/test_profiles.py         — load/save/update_accuracy, decay, last_updated, decay_per_day
-harness/tests/test_router.py           — all 5 routing rules
-harness/tests/test_evaluator.py        — syntax/tests/scope/semantic checks
-harness/tests/test_healer.py           — A/B/C strategy, auto_heal A→B→C
-harness/tests/test_session_stats.py    — log/update/report, empty db, print
-harness/tests/test_tokens.py           — estimate_tokens empty/missing/existing/multiple/per-extension
-harness/tests/test_parallel_delegate.py — order, success flag, exception, heal=True, heal requires subtasks
+harness/tests/test_models.py            — dataclass defaults, enum values
+harness/tests/test_profiles.py          — load/save/update_accuracy, decay, last_updated, decay_per_day
+harness/tests/test_router.py            — all 5 routing rules
+harness/tests/test_evaluator.py         — syntax/tests/scope/semantic checks
+harness/tests/test_healer.py            — A/B/C strategy, auto_heal A→B→C, diff_mode propagation
+harness/tests/test_session_stats.py     — log/update/report, empty db, print
+harness/tests/test_tokens.py            — estimate_tokens empty/missing/existing/per-extension
+harness/tests/test_parallel_delegate.py — order, success, exception, heal=True, diff_mode, no subtasks
+harness/tests/test_parallel_cli.py      — exit codes, --workers flag, missing args
+harness/tests/test_pipeline.py          — gemma4 route, claude route, auto_heal, no_heal, strategy C
 ```
 
 Run: `/opt/homebrew/bin/pytest -q`
@@ -311,9 +315,9 @@ bash harness/stats.sh <session_id>   # single session
 - ✅ Per-task auto_heal in `delegate_parallel()` (`heal=True` + `subtasks=` param)
 - ✅ Decay rate as `CapabilityProfile.decay_per_day` field (default 0.98, JSON-serializable)
 
-**Remaining future ideas:**
-- **Evaluator `--workdir` param** — currently `workdir` in evaluator JSON is used for auto_heal but not for file reads; could unify.
-- **Bench results decay** — benchmark sets accuracy to fixed values, overwriting any real-session decay. Consider merging rather than overwriting.
-- **gemma4_delegate.sh parallel mode** — bash wrapper only supports single file; could add `--parallel` for shell-level multi-dispatch.
-- **`heal=True` parallel + diff** — `_try_heal` always uses full-rewrite (ignores `diff_mode`); could propagate.
-- **`--auto-heal` in router** — router doesn't evaluate; could add end-to-end `route+delegate+eval+heal` single command.
+**All items complete. No remaining known gaps.**
+
+Minor nice-to-haves (low priority):
+- `gemma4_delegate.sh --parallel` currently passes raw JSON through shell — quoting complex task descriptions can be awkward. Could add a `--tasks-file` flag reading JSON from a file.
+- `pipeline.py` doesn't support `subtasks` list (parallel mode is separate). Could add `--parallel` to pipeline for batched subtask dispatch.
+- Benchmark `SOURCE_FILES` are hardcoded absolute paths — break on other machines. Could auto-discover from project root or accept CLI arg.

@@ -87,7 +87,7 @@ def test_heal_succeeds(tmp_path, monkeypatch):
     # Need to patch _try_heal directly since auto_heal import is inside function
     from harness import parallel_delegate as pd_mod
 
-    def fake_try_heal(task, subtask, base, workdir):
+    def fake_try_heal(task, subtask, base, workdir, diff_mode=False):
         base["success"] = True
         base["healer_strategy"] = "A"
         base["output"] = "healed via strategy A (score=80)"
