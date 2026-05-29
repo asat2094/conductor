@@ -21,6 +21,46 @@ def route(subtask: SubTask, profiles: dict[str, CapabilityProfile]) -> AgentType
     return AgentType.GEMMA4
 
 
+def rank_providers(
+    subtask: SubTask,
+    providers: dict,
+    profiles: dict[str, CapabilityProfile],
+    busy_providers: set[str] | None = None,
+) -> list[str]:
+    """
+    Return provider names ordered by cost-normalised accuracy.
+    claude_agent is always appended last as the final fallback.
+    Skips providers that are busy, over token limit, below accuracy threshold,
+    or at session failure budget.
+    """
+    busy = busy_providers or set()
+
+    if subtask.type in _ALWAYS_CLAUDE:
+        return ["claude_agent"]
+
+    candidates = []
+    for name, config in providers.items():
+        if name == "claude_agent":
+            continue
+        if name in busy:
+            continue
+        profile = profiles.get(name)
+        if profile is None:
+            continue
+        if subtask.estimated_tokens > profile.max_reliable_tokens:
+            continue
+        if profile.session_failures >= profile.retry_budget:
+            continue
+        accuracy = profile.accuracy_by_type.get(subtask.type.value, 0.7)
+        if accuracy < 0.70:
+            continue
+        score = accuracy / (config.cost_per_1k_tokens + 0.0001)
+        candidates.append((name, score))
+
+    ranked = [name for name, _ in sorted(candidates, key=lambda x: -x[1])]
+    return ranked + ["claude_agent"]
+
+
 if __name__ == "__main__":
     import json
     import os
