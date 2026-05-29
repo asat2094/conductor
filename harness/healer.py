@@ -1,4 +1,4 @@
-from harness.models import AgentType, CapabilityProfile, EvalResult, SubTask
+from harness.models import CapabilityProfile, EvalResult, SubTask
 
 
 def build_healer_report(
@@ -84,7 +84,7 @@ def auto_heal(
     response_a, code_a = _delegate(workdir, shrunk.description, shrunk.files)
     if code_a is not None:
         changed_a = [str(Path(workdir) / f) for f in shrunk.files]
-        result_a = _evaluate(shrunk, AgentType.GEMMA4, changed_a, response_a)
+        result_a = _evaluate(shrunk, result.agent, changed_a, response_a)
         if result_a.score >= 70:
             return result_a, "A"
 
@@ -93,7 +93,7 @@ def auto_heal(
     response_b, code_b = _delegate(workdir, reprompted.description, reprompted.files)
     if code_b is not None:
         changed_b = [str(Path(workdir) / f) for f in reprompted.files]
-        result_b = _evaluate(reprompted, AgentType.GEMMA4, changed_b, response_b)
+        result_b = _evaluate(reprompted, result.agent, changed_b, response_b)
         if result_b.score >= 70:
             return result_b, "B"
 

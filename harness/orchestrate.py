@@ -107,7 +107,7 @@ def orchestrate(
 
         healed, strategy = auto_heal(
             subtask, result, profiles, workdir,
-            delegate_fn=lambda w, t, f, _pn=provider_name: provider_run(
+            delegate_fn=lambda w, t, f, diff_mode=diff_mode, _pn=provider_name: provider_run(
                 providers[_pn], w, t, f, diff_mode=diff_mode
             ),
             evaluate_fn=evaluate,
@@ -125,7 +125,7 @@ def orchestrate_parallel(
     providers: dict | None = None,
     profiles: dict | None = None,
     diff_mode: bool = False,
-    max_wait_seconds: int = 30,
+    max_wait_seconds: int = 300,
 ) -> list[EvalResult | EscalateToClaudeError]:
     """
     Dispatch multiple subtasks concurrently, sharing the provider busy pool.
