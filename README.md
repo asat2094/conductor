@@ -91,7 +91,15 @@ bash harness/gemma4_delegate.sh \
 
 ### 3. Delegate multiple files in parallel
 
-```python
+```bash
+# Bash (via gemma4_delegate.sh --parallel)
+bash harness/gemma4_delegate.sh --parallel /path/to/project \
+  '[{"task":"Add docstrings to parse_order","file":"orders.py"},
+    {"task":"Add type hints to validate_email","file":"validators.py"}]' \
+  --workers 2 [--diff]
+# → JSON array to stdout; exit 0=all OK, 1=any failed
+
+# Python API (with per-task auto_heal on failure)
 from harness.parallel_delegate import delegate_parallel
 
 results = delegate_parallel(
@@ -100,8 +108,11 @@ results = delegate_parallel(
         {"task": "Add docstrings to parse_order",    "file": "orders.py"},
         {"task": "Add type hints to validate_email", "file": "validators.py"},
     ],
+    heal=True,        # auto_heal(A→B) per failed task
+    subtasks=[...],   # SubTask objects, same order as tasks (required when heal=True)
+    diff_mode=False,  # propagated to heal calls
 )
-# → [{"file": "orders.py", "success": True, "output": "..."}, ...]
+# → [{"file": "orders.py", "success": True, "output": "...", "healer_strategy": None}, ...]
 ```
 
 Only use for truly independent tasks (no shared file dependencies).
@@ -262,18 +273,20 @@ conductor/
 ├── CLAUDE.md                       # auto-read by Claude Code when in this repo
 ├── pyproject.toml
 ├── harness/
-│   ├── models.py                   # SubTask, EvalResult, CapabilityProfile dataclasses
+│   ├── pipeline.py                 # end-to-end route+delegate+eval+heal; python3 -m harness.pipeline
+│   ├── models.py                   # SubTask, EvalResult, CapabilityProfile (decay_per_day, last_updated)
 │   ├── router.py                   # routing logic + CLI (auto token estimation)
-│   ├── tokens.py                   # estimate_tokens() from file sizes
-│   ├── evaluator.py                # scoring + CLI
-│   ├── healer.py                   # failure recovery — auto A→B, manual C
-│   ├── parallel_delegate.py        # concurrent multi-task delegation
-│   ├── profiles.py                 # load/save/update + cross-session decay
+│   ├── tokens.py                   # estimate_tokens() — chars/4 × per-extension multiplier
+│   ├── evaluator.py                # scoring + CLI (--auto-heal, derived changed_files)
+│   ├── healer.py                   # auto_heal(diff_mode=) A→B→C
+│   ├── parallel_delegate.py        # delegate_parallel(heal=, diff_mode=, subtasks=)
+│   ├── parallel_cli.py             # bash-accessible parallel dispatch; python3 -m harness.parallel_cli
+│   ├── profiles.py                 # load/save/update + cross-session decay (per decay_per_day)
 │   ├── session_stats.py            # SQLite delegation log + report
-│   ├── gemma4_delegate.sh          # thin bash wrapper (supports --diff)
-│   ├── gemma4_call.py              # ollama REST API caller (importable run())
+│   ├── gemma4_delegate.sh          # bash wrapper (--diff, --parallel)
+│   ├── gemma4_call.py              # importable run(diff_mode=); --diff falls back to full rewrite
 │   ├── stats.sh                    # stats report CLI
-│   ├── capability_profiles.json    # live gemma4 thresholds
+│   ├── capability_profiles.json    # live gemma4 thresholds (includes decay_per_day)
 │   └── tests/
 │       ├── test_models.py
 │       ├── test_profiles.py
@@ -282,9 +295,11 @@ conductor/
 │       ├── test_healer.py
 │       ├── test_session_stats.py
 │       ├── test_tokens.py
-│       └── test_parallel_delegate.py
+│       ├── test_parallel_delegate.py
+│       ├── test_parallel_cli.py
+│       └── test_pipeline.py
 └── gemma4-bench/
-    ├── bench.py                    # calibration benchmark
+    ├── bench.py                    # calibration benchmark (merges via rolling avg)
     └── bench_results.json          # latest benchmark results
 ```
 
@@ -311,7 +326,17 @@ python3 gemma4-bench/bench.py
 
 **Rolling accuracy update** — each evaluated run updates `accuracy_by_type` as: `current × 0.7 + (score/100) × 0.3`. Decays toward neutral across sessions to prevent stale high scores from misleading the router.
 
-**Diff mode for large files** — `--diff` flag asks gemma4 for a unified diff instead of full file output, reducing hallucination risk on large context. Applied with `patch(1)`.
+**Diff mode for large files** — `--diff` flag asks gemma4 for a unified diff instead of full file output, reducing hallucination risk on large context. Applied with `patch(1)`. If `patch` is unavailable or the diff apply fails, automatically falls back to a full file rewrite.
+
+**`diff_mode` propagates through the heal chain** — when `diff_mode=True`, strategies A and B inside `auto_heal()` honour it. `delegate_parallel(diff_mode=True)` passes it to `_try_heal()` as well.
+
+**Per-extension token multipliers** — `estimate_tokens()` adjusts chars/4 by extension: JSON 1.4×, YAML 1.2×, HTML 1.3×, markdown/txt 0.8×, code baseline 1.0×. Keeps routing decisions accurate without user needing to manually count.
+
+**Decay rate is a profile field** — `CapabilityProfile.decay_per_day` (default 0.98) is JSON-serializable so different agents can have different decay rates without code changes.
+
+**Benchmark merges, not overwrites** — `bench.py` uses `load_profiles + update_accuracy + save_profiles` so real-session accumulated accuracy survives recalibration via rolling avg. Only `max_reliable_tokens` is hard-set (bench-authoritative).
+
+**Pipeline as single entry point** — `harness/pipeline.py` runs the full route→delegate→evaluate→auto_heal loop, updates rolling accuracy, and persists profiles in one call. Exit codes (0/1/2) allow shell-level branching on outcome.
 
 **Parallel delegation** — `delegate_parallel()` uses `ThreadPoolExecutor` for independent tasks. Results returned in input order. Exceptions caught per-task — one failure doesn't block others.
 
