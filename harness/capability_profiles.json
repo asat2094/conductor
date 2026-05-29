@@ -22,5 +22,60 @@
     "session_failures": 0,
     "retry_budget": 10,
     "decay_per_day": 0.98
+  },
+  "deepseek": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
+  "nim": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
+  "gemini": {
+    "max_reliable_tokens": 128000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
+  "openrouter": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
+  "opencode_zen": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
   }
 }

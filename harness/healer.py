@@ -6,7 +6,7 @@ def build_healer_report(
     result: EvalResult,
     profiles: dict[str, CapabilityProfile],
 ) -> str:
-    agent_name = result.agent.value
+    agent_name = result.agent if isinstance(result.agent, str) else result.agent.value
     failures = profiles.get("gemma4", CapabilityProfile(0, {})).session_failures
     budget = profiles.get("gemma4", CapabilityProfile(0, {}, retry_budget=3)).retry_budget
 
