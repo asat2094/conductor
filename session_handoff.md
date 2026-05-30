@@ -1,148 +1,168 @@
 # Conductor — Session Handoff
 
-**Date:** 2026-05-29  
-**Repo:** https://github.com/asat2094/conductor  
+**Date:** 2026-05-30  
+**Repo:** https://github.com/asat2094/conductor (branch: `develop`)  
 **Working dir:** `/Users/ankitatiwari/Desktop/claude-playground/conductor`  
-**Tests:** 68 passing  
-**Last commit:** `498e152 docs: add multi-provider harness design spec`
+**Tests:** 97 passing  
+**Last commit:** `ba0cd26 feat: per-model rate-limit cooldown tracker + openrouter_poolside`
 
 ---
 
-## What was built
+## What this is
 
-Local multi-agent harness. Claude orchestrates; gemma4 (ollama, local) executes mechanical coding tasks. Goal: save Claude API tokens and context on small, bounded work.
+Local multi-agent harness. Claude Code (or OpenCode) orchestrates; free local/cloud models execute mechanical coding tasks. Saves Claude API tokens + context on bounded work.
 
 ```
-Claude (orchestrator)
-  ├─ route → gemma4 (local, free)   code_edit · code_gen · test_write
-  └─ route → Claude agent           research · cross_file_refactor · complex tasks
+Orchestrator (Claude Code / OpenCode)
+  ├─ orchestrate_parallel(subtasks) ─────────────────────────────────┐
+  │                                                                   ▼
+  │   rank_providers() → [gemma4, nim, gemini, openrouter, openrouter_poolside,
+  │                        opencode_deepseek, opencode_mimo, ... claude_agent]
+  │
+  ├─ gemma4              ollama local, 0 cost, 32k ctx
+  ├─ nim                 meta/llama-3.1-8b-instruct, free 40RPM
+  ├─ gemini              gemini-2.5-flash, free 1500/day
+  ├─ openrouter          qwen/qwen3-coder:free, 1M ctx, best free coding model
+  ├─ openrouter_poolside poolside/laguna-m.1:free, coding agent, 262k ctx
+  ├─ opencode_deepseek   deepseek-v4-flash-free via opencode.ai/zen
+  ├─ opencode_mimo       mimo-v2.5-free (Xiaomi) via opencode.ai/zen
+  └─ claude_agent        last fallback (escalate to orchestrator)
 ```
+
+**All providers free.** Routing is cost-normalised accuracy. Fallback is reactive (429 → per-model cooldown tracker → next provider).
 
 ---
 
-## Architecture
+## Using Claude Code or OpenCode as orchestrator
 
-### Fastest path (all-in-one)
+### Claude Code
+
+Set env vars, then call from any project:
 
 ```bash
+export NIM_API_KEY=nvapi-X7jqSwP_...
+export GEMINI_API_KEY=AIzaSyCSIcQK...
+export OPENROUTER_API_KEY=sk-or-v1-3642f...
+export OPENCODE_API_KEY=sk-iJcLU5vr...
+
+# Single task — orchestrator picks best available provider
 python3 -m harness.pipeline '{
   "id": "t1",
-  "description": "Add docstring to validate_order",
+  "description": "Add type hints to validate_order in orders.py",
   "type": "code_edit",
-  "files": ["backend/orders.py"]
-}' --workdir /path/to/project [--diff] [--no-heal]
-# Exit: 0=done, 1=routed to claude_agent, 2=strategy C (escalate)
+  "files": ["orders.py"]
+}' --workdir /your/project
+
+# Parallel dispatch — all subtasks fly concurrently across provider pool
+python3 -c "
+from harness.orchestrate import orchestrate_parallel
+from harness.models import SubTask, TaskType
+
+results = orchestrate_parallel([
+    SubTask('t1', 'Add docstrings to parse_order', TaskType.CODE_EDIT, ['orders.py'], 0),
+    SubTask('t2', 'Add type hints to validate_email', TaskType.CODE_EDIT, ['validators.py'], 0),
+    SubTask('t3', 'Write tests for calculate_discount', TaskType.TEST_WRITE, ['discount.py'], 0),
+], workdir='/your/project')
+
+for r in results:
+    print(r.agent, r.score, r.details)
+"
 ```
 
-### Step-by-step flow
+In `~/.claude/CLAUDE.md` (global) the harness is already configured:
 
-```
-1. python3 -m harness.router '{...}'          → gemma4 | claude_agent (auto-estimates tokens)
-2. bash harness/gemma4_delegate.sh ...        → calls gemma4_call.py (--diff supported)
-   OR
-   bash harness/gemma4_delegate.sh --parallel <workdir> '<tasks_json>' [--workers N] [--diff]
-3. python3 harness/gemma4_call.py ...         → ollama REST API → writes file or applies patch
-                                                (--diff falls back to full rewrite if patch fails)
-4. python3 -m harness.evaluator '{...}' [--auto-heal]
-                                              → score/100; changed_files optional (derived from workdir)
-5. score < 70 → auto_heal(diff_mode=) tries A then B → surfaces C only if both fail
-6. bash harness/stats.sh                      → session token savings report
+```bash
+# Route check
+python3 -m harness.router '{"id":"t1","description":"<task>","type":"code_edit","files":["<path>"]}'
+
+# Full pipeline
+python3 -m harness.pipeline '{"id":"t1",...}' --workdir <abs-workdir>
 ```
 
-### Key files
+### OpenCode
 
-| File | Role |
-|---|---|
-| `harness/pipeline.py` | `run_pipeline(subtask, workdir, diff_mode, auto_heal)` — full loop; `python3 -m harness.pipeline` |
-| `harness/models.py` | Dataclasses: SubTask, EvalResult, CapabilityProfile (last_updated, decay_per_day); Enums |
-| `harness/router.py` | 5-rule routing logic + CLI; auto-estimates tokens from file sizes if omitted |
-| `harness/tokens.py` | `estimate_tokens(files, workdir)` — chars/4 × per-extension multiplier |
-| `harness/evaluator.py` | 4-axis scoring + CLI; `--auto-heal` flag; `changed_files` auto-derived from workdir |
-| `harness/healer.py` | `auto_heal(subtask, result, profiles, workdir, diff_mode=False)` — A→B→C |
-| `harness/parallel_delegate.py` | `delegate_parallel(workdir, tasks, heal=, diff_mode=, subtasks=)` — ThreadPoolExecutor |
-| `harness/parallel_cli.py` | `python3 -m harness.parallel_cli <workdir> <tasks_json> [--diff] [--workers N]` |
-| `harness/profiles.py` | `load_profiles()` (applies decay per `profile.decay_per_day`), `save_profiles()`, `update_accuracy()` |
-| `harness/gemma4_delegate.sh` | Bash wrapper; `--parallel` → `parallel_cli.py`; `--diff` → gemma4_call |
-| `harness/gemma4_call.py` | `run(workdir, task, files, diff_mode=False)` importable + CLI; diff falls back to full rewrite |
-| `harness/session_stats.py` | SQLite log; `log_delegation()`, `update_score()`, `print_report()` |
-| `harness/stats.sh` | CLI wrapper for `session_stats.py` |
-| `harness/capability_profiles.json` | Live gemma4 thresholds (includes `decay_per_day`) |
-| `gemma4-bench/bench.py` | Calibration benchmark; merges via rolling avg — real-session scores survive recalibration |
-| `gemma4-bench/bench_results.json` | Latest benchmark results (all cells 90/100) |
-| `docs/2026-05-24-adaptive-multi-agent-orchestration-design.md` | Design spec (multi-provider future) |
-| `setup.sh` | Idempotent one-shot setup; writes `~/.claude/CLAUDE.md` |
-| `CLAUDE.md` | Auto-read by Claude Code when CWD is this repo |
+```json
+// ~/.config/opencode/config.json
+{
+  "agents": {
+    "conductor": {
+      "command": "python3 /Users/ankitatiwari/Desktop/claude-playground/conductor/harness/pipeline.py",
+      "description": "Routes mechanical coding tasks to free local/cloud models"
+    }
+  }
+}
+```
+
+Then: `/conductor {"id":"t1","description":"...","type":"code_edit","files":["..."]}`
 
 ---
 
-## Critical discoveries
+## Architecture overview
 
-### 1. opencode run = conversational only
-`opencode run -m ollama/gemma4:latest` is a **chat interface** — no file tools. gemma4 asked clarifying questions instead of editing files.
+### Core flow
 
-**Fix:** `gemma4_call.py` embeds file content in prompt, calls `http://localhost:11434/api/generate` directly via `urllib.request`, writes extracted code block to disk.
+```
+orchestrate(subtask, workdir)
+  │
+  ├─ rank_providers()         cost × accuracy ranking; skips busy + rate-limited + low-accuracy
+  │
+  ├─ for provider in ranked:
+  │    ├─ _is_rate_limited()  skip if in cooldown window
+  │    ├─ provider_call.run() ollama or OpenAI-compat HTTP call
+  │    │   └─ 429 → _set_rate_limit(provider, retry_after)  per-model cooldown
+  │    ├─ evaluate()          syntax(25) + tests(35) + scope(20) + semantic(20)
+  │    ├─ _record()           update_accuracy() + save_profiles() + log_delegation()
+  │    ├─ score ≥ 70 → return ✓
+  │    └─ score < 70 → auto_heal(A→B) → score ≥ 70 → return ✓ / else next provider
+  │
+  └─ all exhausted → EscalateToClaudeError
+```
 
-### 2. Benchmark first run scored 20-50
-First benchmark used `opencode run` — prose responses, no code blocks.
+### parallel dispatch
 
-**Fix:** Rewrote to use ollama REST API + explicit `` ```python `` block instruction. Re-run: all 30 cells 90/100.
-
-### 3. Router CLI AttributeError
-`subtask.type.value` failed — JSON gives `type` as plain string.
-
-**Fix:** `subtask_data["type"] = TaskType(subtask_data["type"])` in `__main__` of `router.py` and `evaluator.py`.
-
-### 4. Evaluator scope check — path mismatch
-Full absolute paths vs relative paths → set diff found "extra" files → 10/20.
-
-**Fix:** `_basenames()` — compare filenames only.
-
-### 5. Semantic check — short output scored wrong
-"Written successfully" had low word-overlap with description.
-
-**Fix:** `estimate_semantic()` reads actual file content when output < 30 words. Takes `max(output_score, file_score)`.
-
-### 6. Test score penalised unfairly
-`_run_tests()` returned 0 when no test file existed, regardless of task type.
-
-**Fix:** 20 partial credit when no test file exists.
-
-### 7. gemma4 can't create files
-`gemma4_call.py` errored on missing target.
-
-**Fix:** Skip file read for missing files; use creation-mode prompt.
+```
+orchestrate_parallel(subtasks)
+  shared: busy: set[str], lock: threading.Lock
+  ThreadPoolExecutor(max_workers=len(providers))
+  each subtask → orchestrate(..., _busy=busy, _busy_lock=lock)
+  one task per model at a time; rate-limited providers skipped, tried again next task
+```
 
 ---
 
-## Routing rules
+## Provider registry (`harness/providers.json`)
+
+| Name | Model | Base URL | Key env |
+|---|---|---|---|
+| gemma4 | gemma4:latest | localhost:11434 | — |
+| deepseek | deepseek-v4-flash | api.deepseek.com | DEEPSEEK_API_KEY |
+| nim | meta/llama-3.1-8b-instruct | integrate.api.nvidia.com | NIM_API_KEY |
+| gemini | gemini-2.5-flash | generativelanguage.googleapis.com | GEMINI_API_KEY |
+| openrouter | qwen/qwen3-coder:free | openrouter.ai | OPENROUTER_API_KEY |
+| openrouter_poolside | poolside/laguna-m.1:free | openrouter.ai | OPENROUTER_API_KEY |
+| opencode_deepseek | deepseek-v4-flash-free | opencode.ai/zen/v1 | OPENCODE_API_KEY |
+| opencode_mimo | mimo-v2.5-free | opencode.ai/zen/v1 | OPENCODE_API_KEY |
+
+Free-tier notes:
+- NIM: 40 RPM, no credit card
+- Gemini: 1500 req/day, 15 RPM; gemini-2.5-flash-lite = 30 RPM
+- OpenRouter: `:free` models ~20 RPM, 200/day; qwen3-coder can be rate-limited upstream
+- OpenCode Zen: deepseek-v4-flash-free is a reasoning model (needs generous token budget)
+
+---
+
+## Routing rules (`rank_providers`)
 
 ```python
-_ALWAYS_CLAUDE = {TaskType.RESEARCH, TaskType.CROSS_FILE_REFACTOR}
+# Always Claude
+if subtask.type in {RESEARCH, CROSS_FILE_REFACTOR}: return ["claude_agent"]
 
-def route(subtask, profiles):
-    g = profiles["gemma4"]
-    if subtask.type in _ALWAYS_CLAUDE:                              return AgentType.CLAUDE_AGENT
-    if subtask.estimated_tokens > g.max_reliable_tokens:            return AgentType.CLAUDE_AGENT
-    if g.session_failures >= g.retry_budget:                        return AgentType.CLAUDE_AGENT
-    if g.accuracy_by_type.get(subtask.type.value, 1.0) < 0.70:    return AgentType.CLAUDE_AGENT
-    return AgentType.GEMMA4
+# Per provider, score = accuracy / (cost_per_1k + 0.0001)
+# Skip if: busy | in rate-limit cooldown | no profile | tokens > max_reliable | failures >= budget | accuracy < 0.70
+# Result: [p1, p2, ..., "claude_agent"]   — claude always last
 ```
 
-`estimated_tokens` auto-derived via `estimate_tokens(files, workdir)` (chars/4 × ext multiplier) when 0 or omitted.
-
----
-
-## Token estimation multipliers
-
-| Extension | Multiplier | Reason |
-|---|---|---|
-| `.json` | 1.4× | Dense quotes, repeated keys |
-| `.yaml` / `.yml` | 1.2× | Indentation + colons |
-| `.html` | 1.3× | Tag overhead |
-| `.sql` / `.css` | 1.1× | Moderate overhead |
-| `.py` / `.js` / `.ts` / `.sh` | 1.0× | Baseline |
-| `.md` / `.txt` | 0.8× | Prose compresses well |
-| Unknown | 1.0× | Default |
+`route()` (legacy binary function) still exists for backward compat.
 
 ---
 
@@ -150,229 +170,151 @@ def route(subtask, profiles):
 
 | Check | Max | Method |
 |---|---|---|
-| Syntax | 25 | `ast.parse()` on changed `.py` files |
-| Tests | 35 | Run pytest if test file exists; 20 partial credit if no tests |
+| Syntax | 25 | `ast.parse()` on .py files |
+| Tests | 35 | run pytest if test file exists; 20 partial if no tests |
 | Scope | 20 | `_basenames(changed) - _basenames(requested)` |
-| Semantic | 20 | Word overlap: description vs output (or file content if output short) |
+| Semantic | 20 | word overlap description↔output (or file content if output < 30 words) |
 
-Score ≥ 70: accept. Score < 70: `auto_heal()` fires.
-
-`changed_files` optional in CLI JSON — derived from `workdir + subtask.files` when absent.
+Score ≥ 70 = accept. Score < 70 = healer fires.
 
 ---
 
 ## Healer strategies
 
-| Strategy | Trigger | Action |
-|---|---|---|
-| A — Shrink | Auto (first) | Halve files list (min 1), halve token estimate, retry gemma4 |
-| B — Re-prompt | Auto (if A < 70) | Inject failure detail as constraint, retry gemma4 |
-| C — Escalate | Manual (if A+B fail) | Route to claude_agent, increment `session_failures` |
-
-```python
-auto_heal(
-    subtask, result, profiles, workdir,
-    delegate_fn=None,   # default: gemma4_call.run
-    evaluate_fn=None,   # default: evaluator.evaluate
-    diff_mode=False,    # propagated to both A and B delegate calls
-) -> tuple[EvalResult | None, "A" | "B" | "C"]
-```
-
----
-
-## Parallel delegation
-
-```python
-# Python API
-from harness.parallel_delegate import delegate_parallel
-results = delegate_parallel(
-    workdir="/path/to/project",
-    tasks=[{"task": "...", "file": "orders.py"}, ...],
-    max_workers=3,
-    diff_mode=False,
-    heal=True,           # auto_heal per-task on failure
-    subtasks=[...],      # required when heal=True
-)
-# returns list in input order; exceptions captured per-task; diff_mode propagates to heal calls
-
-# Bash
-bash harness/gemma4_delegate.sh --parallel /abs/workdir '<tasks_json>' [--diff] [--workers 2]
-# OR
-python3 -m harness.parallel_cli /abs/workdir '<tasks_json>' [--diff] [--workers N]
-# Exit: 0=all OK, 1=any failed
-```
-
----
-
-## Diff mode
-
-```bash
-bash harness/gemma4_delegate.sh /abs/workdir "<task>" file.py --diff
-```
-
-Asks gemma4 for unified diff → applies with `patch(1)`.  
-If `patch(1)` unavailable or diff apply fails → **automatically falls back to full file rewrite** (re-calls gemma4 without `--diff`). Warning logged to stderr.
-
-`diff_mode` propagates through: `auto_heal` → `_try_heal` → individual delegate calls.
-
----
-
-## Pipeline (end-to-end)
-
-```python
-from harness.pipeline import run_pipeline, PipelineResult
-
-pr = run_pipeline(
-    subtask,
-    workdir="/my/project",
-    diff_mode=False,
-    auto_heal=True,
-)
-# pr.agent_used, pr.final_score, pr.strategy ("A"/"B"/"C"/None), pr.routed_to_claude
-```
-
-```bash
-python3 -m harness.pipeline '<subtask_json>' --workdir /path [--diff] [--no-heal]
-# Exit: 0=done, 1=routed to claude_agent, 2=strategy C needed
-```
-
-Does: auto-estimate tokens → route → delegate → evaluate → auto_heal → update rolling accuracy → save profiles.
-
----
-
-## Capability profiles (current)
-
-```json
-{
-  "gemma4": {
-    "max_reliable_tokens": 32000,
-    "accuracy_by_type": { "code_edit": 0.9, "code_gen": 0.9, "test_write": 0.9 },
-    "session_failures": 0,
-    "retry_budget": 3,
-    "last_updated": <unix timestamp>,
-    "decay_per_day": 0.98
-  },
-  "claude_agent": {
-    "max_reliable_tokens": 180000,
-    "accuracy_by_type": { "code_edit": 0.95, "code_gen": 0.92, "research": 0.9, "cross_file_refactor": 0.9, "test_write": 0.93 },
-    "session_failures": 0,
-    "retry_budget": 10,
-    "last_updated": <unix timestamp>,
-    "decay_per_day": 0.98
-  }
-}
-```
-
-Rolling avg update: `current * 0.7 + (score/100) * 0.3`  
-Cross-session decay: `0.5 + (accuracy - 0.5) * decay_per_day^days_since_last_update`  
-Applied on `load_profiles()` if days > 1. Benchmark merges via rolling avg — does NOT hard-overwrite.
-
----
-
-## Session stats
-
-- SQLite DB at `harness/session_stats.db` (gitignored)
-- `log_delegation()` → called by `router.py` `__main__` and `pipeline.py`
-- `update_score()` → called by `evaluator.py` `__main__` and `pipeline.py`
-- `CONDUCTOR_SESSION_ID` env var groups delegations (fallback: `"default"`)
-- `bash harness/stats.sh [<session_id>]`
-
----
-
-## Session awareness
-
-| File | Loads when |
+| Strategy | Action |
 |---|---|
-| `~/.claude/CLAUDE.md` | Every Claude Code session globally (written by `setup.sh`) |
-| `conductor/CLAUDE.md` | CWD is inside this repo |
+| A — Shrink | Halve files list, halve token estimate, retry same provider |
+| B — Re-prompt | Inject failure detail as constraint, retry same provider |
+| C — Escalate | Try next provider in ranked list |
 
-Re-run `setup.sh` after moving repo to fix absolute paths.
+`auto_heal()` tries A then B automatically. If both fail → strategy C → orchestrate loop tries next provider.
+
+---
+
+## Per-model rate limit tracker
+
+Added in `orchestrate.py`:
+
+```python
+_rate_limit_until: dict[str, float] = {}   # provider → earliest retry timestamp
+
+# On RateLimitError: parse retry_after from error message, set cooldown
+_set_rate_limit(provider_name, error_msg, default_secs=60)
+
+# In rank loop: skip if in cooldown
+_is_rate_limited(provider_name) -> bool
+```
+
+Cooldown is in-memory per session. Cleared on process restart.
+
+---
+
+## Key files
+
+| File | Role |
+|---|---|
+| `harness/orchestrate.py` | `orchestrate()`, `orchestrate_parallel()`, `EscalateToClaudeError`, rate-limit tracker |
+| `harness/pipeline.py` | `run_pipeline()` → orchestrate; CLI `python3 -m harness.pipeline` |
+| `harness/provider_call.py` | Unified caller: ollama adapter + OpenAI-compat adapter; `RateLimitError`, `ProviderError` |
+| `harness/providers.py` | `load_providers()` — parses providers.json |
+| `harness/providers.json` | Provider registry: model, base_url, cost, tier, api_key_env |
+| `harness/router.py` | `rank_providers()` (multi-provider) + legacy `route()` (gemma4/claude binary) |
+| `harness/models.py` | `SubTask`, `EvalResult` (agent: str), `CapabilityProfile`, `ProviderConfig` |
+| `harness/evaluator.py` | 4-axis scoring; `--auto-heal` CLI flag |
+| `harness/healer.py` | `auto_heal(A→B→C)`; uses `result.agent` not hardcoded GEMMA4 |
+| `harness/parallel_delegate.py` | `delegate_parallel()` using shared orchestrate provider pool |
+| `harness/profiles.py` | `load_profiles()` + cross-session decay + `update_accuracy()` |
+| `harness/capability_profiles.json` | Live accuracy profiles for all 9 providers |
+| `harness/tokens.py` | `estimate_tokens()` — chars/4 × per-extension multiplier |
+| `harness/session_stats.py` | SQLite delegation log |
+| `harness/gemma4_call.py` | Direct ollama caller (still used by legacy paths) |
+
+---
+
+## Token estimation multipliers
+
+| Ext | Multiplier |
+|---|---|
+| .json | 1.4× |
+| .yaml/.yml | 1.2× |
+| .html | 1.3× |
+| .sql/.css | 1.1× |
+| .py/.js/.ts/.sh | 1.0× |
+| .md/.txt | 0.8× |
 
 ---
 
 ## Test suite
 
-68 tests across 10 files, all passing:
+97 tests, all passing. Run: `/opt/homebrew/bin/pytest -q`
 
-```
-harness/tests/test_models.py            — dataclass defaults, enum values, decay_per_day
-harness/tests/test_profiles.py          — load/save/update_accuracy, decay, last_updated, custom decay_per_day
-harness/tests/test_router.py            — all 5 routing rules
-harness/tests/test_evaluator.py         — syntax/tests/scope/semantic checks
-harness/tests/test_healer.py            — A/B/C strategy, auto_heal A→B→C, diff_mode propagation
-harness/tests/test_session_stats.py     — log/update/report, empty db, print
-harness/tests/test_tokens.py            — estimate_tokens empty/missing/existing/per-extension multipliers
-harness/tests/test_parallel_delegate.py — order, success, exception, heal=True, diff_mode, no subtasks
-harness/tests/test_parallel_cli.py      — exit codes, --workers, missing args
-harness/tests/test_pipeline.py          — gemma4 route, claude route, auto_heal, no_heal, strategy C
-```
-
-Run: `/opt/homebrew/bin/pytest -q`
-
----
-
-## Setup (new machine)
-
-```bash
-brew install ollama
-ollama pull gemma4:latest
-ollama serve &
-git clone https://github.com/asat2094/conductor && cd conductor
-bash setup.sh
-python3 gemma4-bench/bench.py   # optional, 15-30 min
-```
+Key test files:
+- `test_providers.py` — load_providers, ProviderConfig, _note stripping
+- `test_provider_call.py` — ollama/openai adapters, RateLimitError, ProviderError
+- `test_orchestrate.py` — fallback loop, rate-limit, escalation, parallel (autouse fixture clears `_rate_limit_until`)
+- `test_router.py` — rank_providers (8 cases) + legacy route (5 cases)
+- `test_parallel_delegate.py` — provider pool distribution, escalation
 
 ---
 
 ## Day-to-day commands
 
 ```bash
+# Start ollama (required for gemma4)
+ollama serve &
+
+# Set cloud keys
+export NIM_API_KEY=nvapi-...
+export GEMINI_API_KEY=AIza...
+export OPENROUTER_API_KEY=sk-or-v1-...
+export OPENCODE_API_KEY=sk-i...
 export CONDUCTOR_SESSION_ID="$(date +%Y%m%d-%H%M%S)"
 
-# Full pipeline (recommended)
+# Single task
 python3 -m harness.pipeline '{"id":"t1","description":"<task>","type":"code_edit","files":["<file>"]}' \
   --workdir /abs/workdir
 
-# Route only
-python3 -m harness.router '{"id":"t1","description":"<task>","type":"code_edit","files":["<file>"]}'
-
-# Single file delegate
-bash harness/gemma4_delegate.sh /abs/workdir "<task>" file.py [--diff]
-
-# Parallel delegate (bash)
-bash harness/gemma4_delegate.sh --parallel /abs/workdir '[{"task":"...","file":"..."}]' --workers 2
-
-# Evaluate (changed_files optional)
-python3 -m harness.evaluator '{"subtask":{...},"agent":"gemma4","workdir":"/abs","output":"..."}' [--auto-heal]
+# Parallel (Python)
+python3 -c "
+from harness.orchestrate import orchestrate_parallel
+from harness.models import SubTask, TaskType
+results = orchestrate_parallel([SubTask('t1','<task>',TaskType.CODE_EDIT,['file.py'],0)], workdir='/abs')
+print(results[0].agent, results[0].score)
+"
 
 # Stats
-bash harness/stats.sh [<session_id>]
+bash harness/stats.sh
+
+# Tests
+/opt/homebrew/bin/pytest -q
 ```
 
 ---
 
-## System (user's machine)
+## System
 
-- **RAM:** 18 GB (Apple M3 Pro, 11 cores)
-- **gemma4:** 9.6 GB — fits comfortably
-- **ollama:** v0.24.0 at `localhost:11434`
-- **Python:** 3.14.5 (`python3`; `python` not in PATH)
+- **Machine:** Apple M3 Pro, 18 GB RAM
+- **Ollama:** localhost:11434, gemma4:latest (9.6 GB) + gemma4:e4b
+- **Python:** 3.14.5 (`python3`)
 - **pytest:** `/opt/homebrew/bin/pytest`
+- **openai SDK:** installed (pip)
 
 ---
 
-## What's done / remaining
-
-**All major items complete** across 3 phases:
+## What's done
 
 | Phase | Items |
 |---|---|
-| 1 | Parallel delegation, diff mode, auto token counting, healer auto-apply, cross-session decay, README bench section |
-| 2 | Diff fallback, per-ext token multipliers, `--auto-heal` in evaluator CLI, `decay_per_day` as profile field, per-task heal in parallel |
-| 3 | `pipeline.py` end-to-end, `parallel_cli.py`, `--parallel` in bash wrapper, `diff_mode` propagation through heal chain, bench merge via rolling avg, evaluator `changed_files` auto-derive |
+| 1 | Parallel delegation, diff mode, auto token counting, healer auto-apply, cross-session decay |
+| 2 | Pipeline.py, parallel_cli.py, diff_mode propagation, bench merge via rolling avg |
+| 3 | Multi-provider harness: provider_call, orchestrate, rank_providers, providers.json, 8 free providers |
+| 4 | E2E tested, per-model rate-limit cooldown, OpenCode Zen integration, correct free model IDs |
 
-**Minor remaining (low priority):**
-- `gemma4_delegate.sh --parallel` — raw JSON quoting awkward for complex descriptions. Could add `--tasks-file <json_file>`.
-- `pipeline.py` — no batch/parallel mode. Could add `--parallel` for multi-subtask dispatch.
-- `gemma4-bench/bench.py SOURCE_FILES` — hardcoded absolute paths, breaks on other machines. Could accept CLI arg or auto-discover.
-- Design spec at `docs/2026-05-24-adaptive-multi-agent-orchestration-design.md` exists — not yet implemented (multi-provider routing, OpenAI/Anthropic API fallback).
+## Remaining / known issues
+
+- `session_stats.py` reporting only counts `gemma4` rows — needs update for multi-provider
+- `--no-heal` CLI flag in pipeline is no-op (orchestrate always heals internally)
+- `qwen/qwen3-coder:free` on OpenRouter is heavily rate-limited at peak; `openrouter_poolside` (laguna-m.1) is the reliable fallback
+- `minimax-m2.5-free` Zen promo ended; replaced by `mimo-v2.5-free` (Xiaomi MiMo)
+- `deepseek` direct key has no balance; works via `opencode_deepseek` (Zen) instead
+- OpenCode Zen models are reasoning models — need generous token budget (no explicit max_tokens cap in provider_call.py, uses model default)
