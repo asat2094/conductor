@@ -188,18 +188,20 @@ Twelve known shortcomings of the naive distributed-build, each with a bridging f
 | **S7** | rate-limit cascade → paid escalation balloon | `admission.py`: per-provider AIMD/Gradient limiter + token-bucket + circuit breaker; `_RETRYABLE_ERRORS` allowlist so throttle ≠ incapability; bounded escalation ladder + per-run cost ceiling. | cost, efficiency |
 | **S6** | free-cloud data exposure | per-file `sensitivity` tag; router hard-rule high→local/Claude only; minimal-slice briefs; append-only exposure audit. **Real on develop** (cloud providers active). Bounds blast radius; cannot guarantee zero retention. | correctness (data-safety), cost |
 | **S13** | no mid-flight visibility — a drifting maker burns full budget before its terminal verdict; stalls invisible | **decomposed checkpoints (segmented heartbeat).** Each maker emits periodic lightweight checkpoint events while running its unit: `{unit_id, segment, action (what it's doing now), self_on_track, elapsed}`. The harness *corroborates* each checkpoint with cheap incremental signals (partial AST-parse, unit RED test still referenced, no scope creep beyond `writes_files`) — the self-assessment is a signal, not trusted (Law 1). Orchestrator sees a segmented liveness+correctness timeline (lean, no bodies), enabling **early-kill on drift**, **stall detection on heartbeat gap**, and a progress timeline in the ledger. | correctness (catch drift early), cost (kill before full burn), efficiency |
+| **S14** | prose channels (briefs, prompts, verdicts, memory) carry filler tokens | **caveman compression at paid-token boundaries** (overlay, not a gate; inspiration: [juliusbrussee/caveman](https://github.com/juliusbrussee/caveman)). Three layers: (a) **orchestrator output mode** — caveman-speak replies, ~65–75% output cut, ~free, reasoning untouched; (b) **`caveman-compress`** on repeatedly-read prose artifacts (CLAUDE.md, persistent SubtaskBrief/contract *notes*) — amortized ~46% input/session, with `validate.py` guaranteeing code/URLs/paths/headings byte-preserved; (c) **terse verdicts/briefs** at paid boundaries — tier2 Claude subagent briefs + checker verdict summaries the orchestrator reads. **Prose only — never code, tests, `context_slices`, contract structured fields, or any gate-parsed evidence (Law 1).** Compression is itself a Claude call → apply only where amortized or to the ~free output mode. Makers are mostly free ($0), so compressing maker *input* is a latency/rate-limit win, not a $ win — target $ savings at the paid Claude boundaries. Reuse caveman's sensitivity guard (.env/.ssh/.aws never shipped) → folds into S6. | efficiency, cost |
 
 ### Build order (leverage spine, ROI-gated)
 
 ```
 S5 → S2 → S12 → S9 → S3 → S11 → S4 → S1 → S10 → S13 → S8 → S7 → S6
 ```
+**S14 (caveman compression) is a cross-cutting overlay, not a spine step.** Layer (a) — orchestrator output mode — is ~free and can be on from day one. Layers (b)/(c) attach once the corresponding artifacts (persistent briefs, paid tier2 briefs, verdict summaries) exist.
 
 S5 first is non-negotiable: without the cost gate, the pipeline is net-negative on small tasks and the rest of the program has negative ROI.
 
 ### New / extended components
 
-**New files:** `harness/decompose.py`, `harness/dag.py`, `harness/lint_plan.py`, `harness/contracts.json`, `harness/characterize.sh` + `harness/golden/`, `harness/workspace.py`, `harness/merge_queue.py`, `harness/admission.py`, `harness/retrieve.py`, `harness/baseline.json` (from `bench.py`), `harness/prompts/spec_auditor.txt`, `harness/heartbeat.py` (checkpoint emit/corroborate + early-kill/stall detection — S13).
+**New files:** `harness/decompose.py`, `harness/dag.py`, `harness/lint_plan.py`, `harness/contracts.json`, `harness/characterize.sh` + `harness/golden/`, `harness/workspace.py`, `harness/merge_queue.py`, `harness/admission.py`, `harness/retrieve.py`, `harness/baseline.json` (from `bench.py`), `harness/prompts/spec_auditor.txt`, `harness/heartbeat.py` (checkpoint emit/corroborate + early-kill/stall detection — S13), `harness/compress.py` (S14 — thin wrapper over the caveman-compress scripts + a prose-channel allowlist that hard-excludes code/tests/`context_slices`/contract fields; reuses caveman's sensitivity guard).
 
 **Extended:** `evaluator.py` (RED/CONTRACT/CHARACTERIZATION/ASSEMBLY modes + 0–1 confidence stop-judger; 100% coverage; downweight self-report), `router.py` (cost SKIP gate → `CLAUDE_INLINE`, sensitivity rule, tier-prior cold-start, pinned snapshot+seed, fallback ladder), `session_stats.py` (run-ledger, regression ledger, exposure audit, cost_usd + budget, cost-per-successful-task KPI), `gemma4_call.py` (structured envelope: status DONE/DONE_WITH_CONCERNS/BLOCKED/NEEDS_CONTEXT + `exported_signatures`; `_RETRYABLE_ERRORS` allowlist), `models.py` (TaskType += REFACTOR/SIGNATURE_CHANGE/PERF; AgentType += CLAUDE_INLINE; SubTask += produces/consumes/logical_deps/sensitivity/writes_files).
 
@@ -222,6 +224,7 @@ S5 first is non-negotiable: without the cost gate, the pipeline is net-negative 
 - `test_router.py` (extend) — cost SKIP → CLAUDE_INLINE; sensitivity hard-rule; cold-start tier-prior (no 1.0 default); tier escalation, only-then-main.
 - `test_admission.py` — AIMD cut on throttle; retry allowlist; cost-ceiling stop.
 - `test_heartbeat.py` — checkpoint emit + corroborate; stall detection on heartbeat gap; early-kill on drift (scope creep / RED-test no longer referenced); self_on_track never gates (Law 1).
+- `test_compress.py` (S14) — code/tests/`context_slices`/contract fields are NEVER sent to compression; `validate.py` preserves code/URLs/paths byte-exact; sensitive paths refused; compression failure falls back to the uncompressed original (no data loss).
 - Keep the 97 existing tests green.
 
 ---
