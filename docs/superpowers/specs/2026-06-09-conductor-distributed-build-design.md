@@ -126,7 +126,8 @@ LEDGER                                              [session_stats.py]
 | **Input** | exactly one `SubtaskBrief` (goal, `context_slices` cut once, contract, `verify_cmd`, `exit_criteria`). Never the whole repo, never main-thread history. Bounded context is the savings. |
 | **Isolation** | own git worktree (path derived from subtask id) + env-injected port/DB/tmpdir. |
 | **Output** | structured envelope `{status: DONE|DONE_WITH_CONCERNS|BLOCKED|NEEDS_CONTEXT, changed_files[], exported_signatures[]}` + the written files on disk. |
-| **Trust** | none of the envelope is trusted as gate evidence — it is a routing/health signal only (Law 1). |
+| **Heartbeat (S13)** | while running, emits periodic checkpoints `{unit_id, segment, action, self_on_track, elapsed}` — a liveness/progress signal the harness corroborates, never trusts (Law 1). Missing heartbeat → stall; corroboration fail → drift → early-kill. |
+| **Trust** | none of the envelope or heartbeat is trusted as gate evidence — both are routing/health signals only (Law 1). |
 | **Failure** | retryable error (429/timeout/5xx) → admission retries SAME maker; quality miss (gate fail) → heal A→B→C→tier2. |
 
 ### Checker contract
@@ -186,18 +187,19 @@ Twelve known shortcomings of the naive distributed-build, each with a bridging f
 | **S8** | parallel makers shared-repo contention | git-worktree-per-maker (path derived from subtask id) + env-injected isolated port/DB/tmpdir; file-overlap scheduling (disjoint writes co-dispatch); merge = single reduce stage; **move `session_stats.db` out of the work tree** (cheap immediate win). | correctness, efficiency |
 | **S7** | rate-limit cascade → paid escalation balloon | `admission.py`: per-provider AIMD/Gradient limiter + token-bucket + circuit breaker; `_RETRYABLE_ERRORS` allowlist so throttle ≠ incapability; bounded escalation ladder + per-run cost ceiling. | cost, efficiency |
 | **S6** | free-cloud data exposure | per-file `sensitivity` tag; router hard-rule high→local/Claude only; minimal-slice briefs; append-only exposure audit. **Real on develop** (cloud providers active). Bounds blast radius; cannot guarantee zero retention. | correctness (data-safety), cost |
+| **S13** | no mid-flight visibility — a drifting maker burns full budget before its terminal verdict; stalls invisible | **decomposed checkpoints (segmented heartbeat).** Each maker emits periodic lightweight checkpoint events while running its unit: `{unit_id, segment, action (what it's doing now), self_on_track, elapsed}`. The harness *corroborates* each checkpoint with cheap incremental signals (partial AST-parse, unit RED test still referenced, no scope creep beyond `writes_files`) — the self-assessment is a signal, not trusted (Law 1). Orchestrator sees a segmented liveness+correctness timeline (lean, no bodies), enabling **early-kill on drift**, **stall detection on heartbeat gap**, and a progress timeline in the ledger. | correctness (catch drift early), cost (kill before full burn), efficiency |
 
 ### Build order (leverage spine, ROI-gated)
 
 ```
-S5 → S2 → S12 → S9 → S3 → S11 → S4 → S1 → S10 → S8 → S7 → S6
+S5 → S2 → S12 → S9 → S3 → S11 → S4 → S1 → S10 → S13 → S8 → S7 → S6
 ```
 
 S5 first is non-negotiable: without the cost gate, the pipeline is net-negative on small tasks and the rest of the program has negative ROI.
 
 ### New / extended components
 
-**New files:** `harness/decompose.py`, `harness/dag.py`, `harness/lint_plan.py`, `harness/contracts.json`, `harness/characterize.sh` + `harness/golden/`, `harness/workspace.py`, `harness/merge_queue.py`, `harness/admission.py`, `harness/retrieve.py`, `harness/baseline.json` (from `bench.py`), `harness/prompts/spec_auditor.txt`.
+**New files:** `harness/decompose.py`, `harness/dag.py`, `harness/lint_plan.py`, `harness/contracts.json`, `harness/characterize.sh` + `harness/golden/`, `harness/workspace.py`, `harness/merge_queue.py`, `harness/admission.py`, `harness/retrieve.py`, `harness/baseline.json` (from `bench.py`), `harness/prompts/spec_auditor.txt`, `harness/heartbeat.py` (checkpoint emit/corroborate + early-kill/stall detection — S13).
 
 **Extended:** `evaluator.py` (RED/CONTRACT/CHARACTERIZATION/ASSEMBLY modes + 0–1 confidence stop-judger; 100% coverage; downweight self-report), `router.py` (cost SKIP gate → `CLAUDE_INLINE`, sensitivity rule, tier-prior cold-start, pinned snapshot+seed, fallback ladder), `session_stats.py` (run-ledger, regression ledger, exposure audit, cost_usd + budget, cost-per-successful-task KPI), `gemma4_call.py` (structured envelope: status DONE/DONE_WITH_CONCERNS/BLOCKED/NEEDS_CONTEXT + `exported_signatures`; `_RETRYABLE_ERRORS` allowlist), `models.py` (TaskType += REFACTOR/SIGNATURE_CHANGE/PERF; AgentType += CLAUDE_INLINE; SubTask += produces/consumes/logical_deps/sensitivity/writes_files).
 
@@ -219,6 +221,7 @@ S5 first is non-negotiable: without the cost gate, the pipeline is net-negative 
 - `test_green_gate.py` — self-report ignored; independent re-run; full-suite regression caught.
 - `test_router.py` (extend) — cost SKIP → CLAUDE_INLINE; sensitivity hard-rule; cold-start tier-prior (no 1.0 default); tier escalation, only-then-main.
 - `test_admission.py` — AIMD cut on throttle; retry allowlist; cost-ceiling stop.
+- `test_heartbeat.py` — checkpoint emit + corroborate; stall detection on heartbeat gap; early-kill on drift (scope creep / RED-test no longer referenced); self_on_track never gates (Law 1).
 - Keep the 97 existing tests green.
 
 ---
