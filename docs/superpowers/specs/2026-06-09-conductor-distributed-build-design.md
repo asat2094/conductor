@@ -140,7 +140,8 @@ The checker is an **external mechanical referee** = the gate engine (`evaluator.
 | **Gate sequence by task class** | **functional:** RED (mutation kill-rate + RED-cause string) → GREEN (re-run unit test + FULL suite) → CONTRACT (AST signature diff vs `contracts.json`). **non-functional** (refactor/rename/perf): CHARACTERIZATION (golden I/O diff) → CONTRACT; rename also uses compile-RED. **assembly:** ASSEMBLY golden over merged coupled units. |
 | **Decision** | each gate → pass/fail + sub-confidence; aggregate to a 0–1 score. **≥0.95 → auto-accept, orchestrator reads nothing.** **<0.95 → escalate** (orchestrator failure-read, then Opus). A gate hard-fail (RED survives mutants, GREEN suite red, CONTRACT drift) is an unconditional reject regardless of score. |
 | **Orchestrator reads** | failures always; passes never (trust mechanical green) — **except** a thin periodic Opus **random audit** of accepted units (Law 3 backstop for correlated blind spots). |
-| **Output** | lean verdict `{unit_id, gate_results, confidence, accept|escalate, changed_files}` — never file bodies. This is all the orchestrator's context ever sees. |
+| **Intervention (control-takeback)** | on a blind-spot signal — ensemble disagreement, audit catch, or a high-stakes unit that could not be staffed with diverse makers — the checker raises an INTERVENE verdict. The orchestrator then takes control of that unit: re-derive via a tier2 Opus subagent, or implement inline. Accuracy/correctness outrank cost in this regime (Law 3). |
+| **Output** | lean verdict `{unit_id, gate_results, confidence, accept|escalate|intervene, changed_files}` — never file bodies. This is all the orchestrator's context ever sees. |
 | **Invariants** | Laws 1–3 hold on every gate. No gate may derive its evidence from the artifact's own author. |
 
 ### Lifecycle
@@ -163,7 +164,7 @@ The checker is an **external mechanical referee** = the gate engine (`evaluator.
 
 1. **No gate trusts the maker's self-report.** Evidence is harness-derived — AST parse of the actual written file, independent re-run — never the maker's own envelope/output string. Model-based auditors are **advisory only, never gating**.
 2. **Mechanical-first, model-last.** Deterministic gates run on 100% of units with no Claude reading; Claude/Opus is invoked only when mechanical confidence is sub-0.95.
-3. **Seed-input ceiling is real.** Golden / characterization / contract gates verify only the captured seed inputs and the syntactic surface. Keep a thin **periodic Opus random audit** as the backstop for correlated cheap-maker blind spots. Do not claim "sampling eliminated."
+3. **Seed-input ceiling is real — and in the blind-spot regime, accuracy/correctness outrank cost.** Golden / characterization / contract gates verify only the captured seed inputs and the syntactic surface, so correlated cheap-maker blind spots can produce wrong-but-green. Three layers bound it: (a) **proactive maker diversity** — the test-author, impl-author, and any verifier roles for one unit draw from *different model families/providers*, so a shared blind spot is unlikely; (b) a thin **periodic Opus random audit** of accepted units; (c) **orchestrator control-takeback** — on any blind-spot signal (ensemble disagreement, audit catch, or unavoidably low maker diversity on a high-stakes unit), the orchestrator *intervenes and takes control of that unit*: it escalates to a more capable independent agent (tier2 Opus subagent) to re-derive, or implements the unit inline. This deliberately spends cost to protect correctness. Do not claim "sampling eliminated."
 
 ---
 
@@ -204,7 +205,7 @@ S5 first is non-negotiable: without the cost gate, the pipeline is net-negative 
 
 ## 6. Unresolved (no clean fix — bound, do not pretend to close)
 
-- **Correlated blind spots** — if two cheap makers and cheap mutation operators share a gap, a logic-shaped under-specified test passes mechanically below 0.95. Only periodic Opus/human audit bounds the tail.
+- **Correlated blind spots** — if two cheap makers and cheap mutation operators share a gap, a logic-shaped under-specified test passes mechanically below 0.95. Not fully closable, but bounded by three layers (Law 3): proactive cross-family **maker diversity** across the test/impl/verify roles; a periodic Opus/human **random audit**; and **orchestrator control-takeback** (INTERVENE verdict → tier2 Opus re-derive or inline implement) whenever a blind-spot signal fires or a high-stakes unit cannot be staffed with diverse makers. Accuracy/correctness outrank cost in this regime — the residual tail is the cost of that trade, not a silent wrong-accept.
 - **Semantic seam correctness** — contracts are syntactic; a type-correct-but-semantically-wrong callee passes without generated/property inputs at the seam.
 - **S6 retention** — once bytes reach a free provider, there is no control over its training/retention policy. The bridge bounds and audits blast radius; it cannot guarantee zero exposure.
 
