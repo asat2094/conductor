@@ -41,15 +41,15 @@ Superpowers (and similar) ship a TDD *discipline* — advisory markdown one acto
 
 **Net-new (the correctness spine — this design):**
 - **Decomposition** — no `decompose.py` / `dag.py` / `lint_plan.py`, no SubtaskBrief, no `produces`/`consumes`/`logical_deps`. Absent.
-- **TDD gates** — no RED gate, no GREEN re-run, no mutation adequacy, no test authoring. Absent.
-- **Author separation** — no `test_author ≠ impl_author`, no Claude-validates-test step. Absent.
+- **TDD loop / gates** — test *execution* exists (see evaluator below) but only as a soft, changed-files-only scoring axis. The loop is absent: no RED-first (the test is never run before impl to assert it fails), no test authoring (a `test_<name>` file must pre-exist), no hard GREEN gate (the pytest result is a 0–35 *score*, not a pass/fail gate — a 0 can still total ≥70 via the other axes), no full-suite regression (it runs `pytest <changed_files>` only, so a maker breaking a sibling test elsewhere is not caught), no mutation adequacy.
+- **Author separation** — no `test_author ≠ impl_author`, no orchestrator-validates-test step. Absent.
 - **Evaluator** — exists but in a weak, self-report-trusting form (see below).
 
 The evaluator that exists today:
 
 ```
 syntax    = ast.parse                                           (25)
-tests     = run pytest IF a test file exists, else 20 free credit (35)  ← S3: refactor free-pass
+tests     = pytest <changed_files> IF a test_<name> pre-exists  (35)  ← soft score, changed-files only, NOT a gate; S3 refactor free-pass
 scope     = basename diff (changed − requested)                 (20)
 semantic  = word-overlap of maker's OWN output string vs desc   (20)  ← S11: gameable, trusts self-report
 ```
@@ -117,6 +117,31 @@ LEDGER                                              [session_stats.py]
 | validate the unit test (small read) | run own tests, self-report (re-verified) |
 | check verdicts; integration/merge decisions | mechanical edits, codegen, boilerplate |
 | author integration + acceptance tests | author unit tests (validated by orchestrator) |
+
+### Maker contract
+
+| Field | Spec |
+|---|---|
+| **Identity** | one provider per unit-role; tiered: tier0 gemma4 local · tier1 free cloud · tier2 Claude subagent. `test_author ≠ impl_author` for the same unit (harness-enforced). |
+| **Input** | exactly one `SubtaskBrief` (goal, `context_slices` cut once, contract, `verify_cmd`, `exit_criteria`). Never the whole repo, never main-thread history. Bounded context is the savings. |
+| **Isolation** | own git worktree (path derived from subtask id) + env-injected port/DB/tmpdir. |
+| **Output** | structured envelope `{status: DONE|DONE_WITH_CONCERNS|BLOCKED|NEEDS_CONTEXT, changed_files[], exported_signatures[]}` + the written files on disk. |
+| **Trust** | none of the envelope is trusted as gate evidence — it is a routing/health signal only (Law 1). |
+| **Failure** | retryable error (429/timeout/5xx) → admission retries SAME maker; quality miss (gate fail) → heal A→B→C→tier2. |
+
+### Checker contract
+
+The checker is an **external mechanical referee** = the gate engine (`evaluator.py`) + the orchestrator's CHECK step. It is specified as tightly as the maker so "correctness" is not a vibe.
+
+| Field | Spec |
+|---|---|
+| **Identity** | deterministic gate engine, runs on 100% of units, no model in the hot path (Law 2). |
+| **Reads** | the written file (AST-parsed), the unit test, `contracts.json`, golden snapshots, full-suite result. **Never** the maker's self-reported `output`/envelope string (downweighted to ~0, Law 1). |
+| **Gate sequence by task class** | **functional:** RED (mutation kill-rate + RED-cause string) → GREEN (re-run unit test + FULL suite) → CONTRACT (AST signature diff vs `contracts.json`). **non-functional** (refactor/rename/perf): CHARACTERIZATION (golden I/O diff) → CONTRACT; rename also uses compile-RED. **assembly:** ASSEMBLY golden over merged coupled units. |
+| **Decision** | each gate → pass/fail + sub-confidence; aggregate to a 0–1 score. **≥0.95 → auto-accept, orchestrator reads nothing.** **<0.95 → escalate** (orchestrator failure-read, then Opus). A gate hard-fail (RED survives mutants, GREEN suite red, CONTRACT drift) is an unconditional reject regardless of score. |
+| **Orchestrator reads** | failures always; passes never (trust mechanical green) — **except** a thin periodic Opus **random audit** of accepted units (Law 3 backstop for correlated blind spots). |
+| **Output** | lean verdict `{unit_id, gate_results, confidence, accept|escalate, changed_files}` — never file bodies. This is all the orchestrator's context ever sees. |
+| **Invariants** | Laws 1–3 hold on every gate. No gate may derive its evidence from the artifact's own author. |
 
 ### Lifecycle
 
