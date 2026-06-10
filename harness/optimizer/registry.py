@@ -7,6 +7,7 @@ import os
 from typing import Callable
 
 from harness.optimizer.base import Compressor, OptimizeConfig
+from harness.optimizer.backends.null import NullCompressor
 
 _BACKENDS: dict[str, Callable[[], Compressor]] = {}
 
@@ -18,10 +19,12 @@ def register(name: str, factory: Callable[[], Compressor]) -> None:
 def resolve(name: str) -> Compressor:
     factory = _BACKENDS.get(name)
     if factory is None:
-        return _BACKENDS["null"]()
+        fallback = _BACKENDS.get("null")
+        return fallback() if fallback else NullCompressor()
     inst = factory()
     if not inst.available():
-        return _BACKENDS["null"]()
+        fallback = _BACKENDS.get("null")
+        return fallback() if fallback else NullCompressor()
     return inst
 
 

@@ -26,3 +26,43 @@ def test_unknown_backend_degrades_to_null():
     r = optimize(msgs, OptimizeConfig(backend="nope"))
     assert r.backend == "null"
     assert r.messages == msgs
+
+
+def test_facade_degrades_to_null_when_backend_raises(monkeypatch):
+    from harness.optimizer import registry
+    from harness.optimizer.base import OptimizeConfig as _Cfg
+
+    class _Boom:
+        name = "boom"
+        def available(self): return True
+        def optimize(self, messages, cfg): raise RuntimeError("kaboom")
+        def retrieve(self, handle): return None
+
+    registry.register("boom", lambda: _Boom())
+    try:
+        msgs = [{"role": "assistant", "content": "x" * 4000}]
+        r = optimize(msgs, _Cfg(backend="boom"))
+        assert r.backend == "null"
+        assert r.messages == msgs
+    finally:
+        registry._BACKENDS.pop("boom", None)
+
+
+def test_facade_degrades_when_backend_returns_malformed(monkeypatch):
+    from harness.optimizer import registry
+    from harness.optimizer.base import OptimizeConfig as _Cfg, OptimizeResult
+
+    class _Bad:
+        name = "bad"
+        def available(self): return True
+        def optimize(self, messages, cfg): return OptimizeResult(messages=None, backend="bad")
+        def retrieve(self, handle): return None
+
+    registry.register("bad", lambda: _Bad())
+    try:
+        msgs = [{"role": "assistant", "content": "y" * 4000}]
+        r = optimize(msgs, _Cfg(backend="bad"))
+        assert r.backend == "null"
+        assert r.messages == msgs
+    finally:
+        registry._BACKENDS.pop("bad", None)

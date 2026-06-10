@@ -26,13 +26,16 @@ def optimize(messages: list[dict[str, Any]], cfg: Optional[OptimizeConfig] = Non
     (system role, protect-tagged, or below min_tokens) are restored byte-identical.
     """
     cfg = cfg or OptimizeConfig()
+    before = count_tokens(messages)
     backend = registry.resolve_from_config(cfg)
     try:
         result = backend.optimize(messages, cfg)
+        if result is None or result.messages is None:
+            raise ValueError("backend returned malformed result")
     except Exception:
         result = NullCompressor().optimize(messages, cfg)
     result.messages = restore_protected(messages, result.messages, cfg)
-    # recompute after-count in case protected restore changed it
+    result.tokens_before = before            # authoritative, not backend-supplied (I-3)
     result.tokens_after = count_tokens(result.messages)
     result.tokens_saved = max(0, result.tokens_before - result.tokens_after)
     return result
