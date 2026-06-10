@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conductor/subtask_brief.schema.json",
+  "title": "SubtaskBrief",
+  "description": "Self-contained unit of work emitted by DECOMPOSE (REQ-D2). Bounded context: the only thing a maker receives.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "goal", "task_type", "files", "context_slices", "contract", "verify_cmd", "exit_criteria", "sensitivity"],
+  "properties": {
+    "id": { "type": "string", "description": "stable unit id; worktree path derives from this (ADR-0013)" },
+    "goal": { "type": "string", "description": "one-sentence intent (prose; caveman-compressible)" },
+    "task_type": {
+      "type": "string",
+      "enum": ["code_edit", "code_gen", "test_write", "refactor", "signature_change", "perf"],
+      "description": "drives the gate profile (ADR-0008/0010)"
+    },
+    "files": { "type": "array", "items": { "type": "string" }, "description": "files the unit reads/touches" },
+    "writes_files": { "type": "array", "items": { "type": "string" }, "description": "files the unit may write; used for file-overlap co-dispatch (NFR-PERF-2) and scope-creep detection" },
+    "context_slices": {
+      "type": "array",
+      "description": "exact code slices cut ONCE by the orchestrator; byte-exact, never compressed (REQ-E3)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "start_line", "end_line"],
+        "properties": {
+          "path": { "type": "string" },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "end_line": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["produces", "consumes"],
+      "properties": {
+        "produces": { "type": "array", "items": { "type": "string" }, "description": "symbols/return-shapes this unit creates" },
+        "consumes": { "type": "array", "items": { "type": "string" }, "description": "symbols this unit depends on (must resolve to an upstream produces — lint_plan, REQ-D3)" },
+        "expected_behavior": { "type": "string", "description": "structured/asserted behavior the RED test must target (REQ-T1 cause match)" }
+      }
+    },
+    "logical_deps": { "type": "array", "items": { "type": "string" }, "description": "unit ids this unit is logically coupled to even without a structural edge (REQ-D1)" },
+    "verify_cmd": { "type": "string", "description": "command the harness runs to verify the unit (e.g. pytest path::test)" },
+    "exit_criteria": { "type": "string", "description": "the single done-condition" },
+    "sensitivity": { "type": "string", "enum": ["low", "high"], "description": "high → local/Claude makers only (REQ-R4, ADR-0017)" },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "assigned makers; harness enforces test_author != impl_author (REQ-T2)",
+      "properties": {
+        "test_author": { "type": "string" },
+        "impl_author": { "type": "string" },
+        "verifier": { "type": "string" }
+      }
+    }
+  }
+}

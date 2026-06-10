@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-09
 **Branch:** `develop`
-**Status:** Design — pending user review, then implementation plan
+**Status:** SUPERSEDED — restructured into the SDD/ADR/TDD-compliant set at [docs/specs/conductor/](../../specs/conductor/requirements.md) (requirements + design v2 + schemas + tasks) and [docs/adr/](../../adr/). Kept for history. This narrative-only draft had no requirements layer, no ADRs, an unbuildable build order, and an ungated orchestrator — all fixed in the new set.
 
 ---
 
