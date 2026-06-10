@@ -1,16 +1,16 @@
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 
 class TaskType(str, Enum):
     CODE_EDIT = "code_edit"
     CODE_GEN = "code_gen"
     RESEARCH = "research"
-    CROSS_FILE_REFACTOR = "cross_file_refactor"
+    CROSS_FILE_REFACTOR = "cross_file_refactor"  # multi-file → always routed to Claude
     TEST_WRITE = "test_write"
-    REFACTOR = "refactor"
+    REFACTOR = "refactor"  # single-file / bounded refactor → eligible for makers
     SIGNATURE_CHANGE = "signature_change"
     PERF = "perf"
 
@@ -30,7 +30,7 @@ class SubTask:
     estimated_tokens: int
     dependencies: list[str] = field(default_factory=list)
     assigned_agent: Optional[AgentType] = None
-    sensitivity: str = "low"
+    sensitivity: Literal["low", "high"] = "low"
     writes_files: list[str] = field(default_factory=list)
     produces: list[str] = field(default_factory=list)
     consumes: list[str] = field(default_factory=list)
