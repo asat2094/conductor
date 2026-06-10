@@ -8,7 +8,7 @@ hint the orchestrator folds into logical_deps upstream; this module is determini
 """
 from harness.brief import validate_brief
 from harness.lint_plan import lint_briefs
-from harness.dag import build_edges, topo_waves
+from harness.dag import build_edges, topo_waves, DagCycleError
 
 
 class DecompositionError(Exception):
@@ -30,4 +30,7 @@ def decompose(briefs: list[dict]) -> list[list[str]]:
     if lint_errors:
         raise DecompositionError(lint_errors)
 
-    return topo_waves(build_edges(briefs))
+    try:
+        return topo_waves(build_edges(briefs))
+    except DagCycleError as e:
+        raise DecompositionError([str(e)])

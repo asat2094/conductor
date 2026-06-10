@@ -31,3 +31,9 @@ def test_flags_placeholder_in_exit_criteria():
     briefs = [_b("a", exit_criteria="TBD")]
     errs = lint_briefs(briefs)
     assert any("placeholder" in e.lower() for e in errs)
+
+
+def test_flags_duplicate_producer():
+    briefs = [_b("a", produces=["dup"]), _b("b", produces=["dup"])]
+    errs = lint_briefs(briefs)
+    assert any("dup" in e and "produced by" in e.lower() for e in errs)

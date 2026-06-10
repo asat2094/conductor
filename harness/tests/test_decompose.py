@@ -30,3 +30,10 @@ def test_decompose_raises_on_lint_failure():
     with pytest.raises(DecompositionError) as ei:
         decompose([ghost])
     assert any("nonexistent" in e for e in ei.value.errors)
+
+
+def test_decompose_raises_decomposition_error_on_cycle():
+    cyclic_a = {**A, "id": "a", "contract": {"produces": ["x"], "consumes": ["y"]}}
+    cyclic_b = {**B, "id": "b", "contract": {"produces": ["y"], "consumes": ["x"]}}
+    with pytest.raises(DecompositionError):
+        decompose([cyclic_a, cyclic_b])

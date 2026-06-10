@@ -41,6 +41,7 @@ class SubtaskBrief:
     @classmethod
     def from_dict(cls, d: dict) -> "SubtaskBrief":
         c = d["contract"]
+        # NOTE: schema 'roles' is intentionally not mapped in v1 — maker-role wiring lands in the pipeline plan (Plan 3).
         return cls(
             id=d["id"],
             goal=d["goal"],
