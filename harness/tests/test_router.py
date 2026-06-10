@@ -1,5 +1,5 @@
 from harness.models import SubTask, TaskType, AgentType, CapabilityProfile
-from harness.router import route
+from harness.router import route, cost_skip
 
 def _profiles(failures=0, max_tokens=8000, code_edit_acc=0.85):
     return {
@@ -126,3 +126,22 @@ def test_rank_providers_prefers_cheaper_at_equal_accuracy():
     providers = {k: _rp_providers()[k] for k in ("deepseek", "gemini")}
     ranked = rank_providers(_rp_task(), providers, profiles)
     assert ranked[0] == "gemini"  # cheaper: 0.00015 vs 0.0014
+
+
+# --- cost_skip tests ---
+
+def _st(tokens, ttype=TaskType.CODE_EDIT):
+    return SubTask(id="t", description="d", type=ttype, files=["a.py"], estimated_tokens=tokens)
+
+
+def test_cost_skip_routes_tiny_task_to_inline():
+    assert cost_skip(_st(100)) == AgentType.CLAUDE_INLINE
+
+
+def test_cost_skip_passes_large_task_through():
+    assert cost_skip(_st(20_000)) is None  # None → fall through to rank_providers
+
+
+def test_cost_skip_does_not_inline_always_claude_types():
+    assert cost_skip(_st(50, ttype=TaskType.RESEARCH)) is None
+    assert cost_skip(_st(50, ttype=TaskType.CROSS_FILE_REFACTOR)) is None

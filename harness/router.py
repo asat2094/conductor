@@ -1,6 +1,23 @@
 from harness.models import SubTask, AgentType, TaskType, CapabilityProfile
+from harness.cost_model import should_inline
 
 _ALWAYS_CLAUDE: set[TaskType] = {TaskType.RESEARCH, TaskType.CROSS_FILE_REFACTOR}
+
+
+def cost_skip(subtask: SubTask) -> AgentType | None:
+    """
+    ROI meta-gate (REQ-R1, ADR-0016). Returns CLAUDE_INLINE when delegating the task
+    would cost the orchestrator more than just doing it inline (task too small for the
+    delegation overhead to pay off). Returns None to fall through to rank_providers().
+
+    Research / cross-file-refactor are never inlined here — they reach claude_agent via
+    normal routing.
+    """
+    if subtask.type in _ALWAYS_CLAUDE:
+        return None
+    if should_inline(subtask):
+        return AgentType.CLAUDE_INLINE
+    return None
 
 
 def route(subtask: SubTask, profiles: dict[str, CapabilityProfile]) -> AgentType:
