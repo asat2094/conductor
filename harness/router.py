@@ -96,6 +96,10 @@ if __name__ == "__main__":
         )
     subtask = SubTask(**subtask_data)
     profiles = load_profiles()
+    # NOTE: cost_skip() is intentionally NOT applied here. The CLI exposes raw route()
+    # for backward compat; the cost-skip ROI gate is wired into the orchestrate pipeline
+    # in the S12 plan (see docs/superpowers/plans). Do not add cost_skip here without
+    # updating harness/gemma4_delegate.sh, which consumes this CLI's output.
     agent = route(subtask, profiles)
 
     session_id = os.environ.get("CONDUCTOR_SESSION_ID", "default")

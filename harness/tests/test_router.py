@@ -145,3 +145,15 @@ def test_cost_skip_passes_large_task_through():
 def test_cost_skip_does_not_inline_always_claude_types():
     assert cost_skip(_st(50, ttype=TaskType.RESEARCH)) is None
     assert cost_skip(_st(50, ttype=TaskType.CROSS_FILE_REFACTOR)) is None
+
+
+def test_cost_skip_inlines_new_small_task_types():
+    # REFACTOR/SIGNATURE_CHANGE/PERF are maker-eligible types: tiny ones cost-skip to inline
+    for tt in (TaskType.REFACTOR, TaskType.SIGNATURE_CHANGE, TaskType.PERF):
+        assert cost_skip(_st(100, ttype=tt)) == AgentType.CLAUDE_INLINE
+
+
+def test_cost_skip_passes_large_new_task_types_through():
+    # REFACTOR/SIGNATURE_CHANGE/PERF are maker-eligible types: large ones pass through
+    for tt in (TaskType.REFACTOR, TaskType.SIGNATURE_CHANGE, TaskType.PERF):
+        assert cost_skip(_st(20_000, ttype=tt)) is None
