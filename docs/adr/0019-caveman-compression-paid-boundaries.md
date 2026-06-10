@@ -1,6 +1,6 @@
 # ADR-0019: Caveman compression as a cross-cutting overlay at paid-token boundaries
 
-- **Status:** Proposed
+- **Status:** Superseded by [ADR-0021](./0021-pluggable-context-optimizer.md) — caveman is now one backend behind the pluggable optimizer facade, not the fixed engine. Its prose-only / never-gate-evidence guidance survives as the facade's protect-list invariant.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-E1, REQ-E2, REQ-E3
 

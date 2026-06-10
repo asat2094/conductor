@@ -31,5 +31,6 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0016](./0016-cost-skip-claude-inline.md) | Cost-skip → CLAUDE_INLINE | Proposed |
 | [0017](./0017-sensitivity-tag-data-boundary.md) | Sensitivity-tag data boundary | Proposed |
 | [0018](./0018-segmented-heartbeat.md) | Segmented heartbeat (v1 stall-only) | Proposed (scoped) |
-| [0019](./0019-caveman-compression-paid-boundaries.md) | Caveman compression at paid boundaries | Proposed |
+| [0019](./0019-caveman-compression-paid-boundaries.md) | Caveman compression at paid boundaries | Superseded by 0021 |
 | [0020](./0020-mcp-unifying-integration-surface.md) | MCP unifying integration surface | Proposed but Deferred (Phase 2) |
+| [0021](./0021-pluggable-context-optimizer.md) | Pluggable context-optimizer facade (baked-in defaults, opt-in backends) | Proposed |
