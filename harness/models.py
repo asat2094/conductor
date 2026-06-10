@@ -10,11 +10,15 @@ class TaskType(str, Enum):
     RESEARCH = "research"
     CROSS_FILE_REFACTOR = "cross_file_refactor"
     TEST_WRITE = "test_write"
+    REFACTOR = "refactor"
+    SIGNATURE_CHANGE = "signature_change"
+    PERF = "perf"
 
 
 class AgentType(str, Enum):
     GEMMA4 = "gemma4"
     CLAUDE_AGENT = "claude_agent"
+    CLAUDE_INLINE = "claude_inline"
 
 
 @dataclass
@@ -26,6 +30,11 @@ class SubTask:
     estimated_tokens: int
     dependencies: list[str] = field(default_factory=list)
     assigned_agent: Optional[AgentType] = None
+    sensitivity: str = "low"
+    writes_files: list[str] = field(default_factory=list)
+    produces: list[str] = field(default_factory=list)
+    consumes: list[str] = field(default_factory=list)
+    logical_deps: list[str] = field(default_factory=list)
 
 
 @dataclass
