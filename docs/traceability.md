@@ -36,6 +36,9 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-R2 | cold-start no 1.0 default | router.py, profiles.py | 0015 | T9.1 | test_router::test_cold_start_no_1_0 |
 | REQ-R3 | deterministic routing (pinned snapshot+seed) | router.py | 0015 | T10.1 | test_router::test_deterministic |
 | REQ-R4 | sensitivity hard-rule | router.py | 0017 | T6.1 | test_router::test_sensitivity |
+| REQ-RM1 | roles=model assignments (role_model_policy) | router/role_policy | 0024 | (Pipeline plan) | test_role_policy::assign |
+| REQ-RM2 | bounded-context isolation invariant | dispatch/workspace | 0024 | (Pipeline plan) | test_dispatch::isolated_context |
+| REQ-RM3 | log assigned model; optimize iff paid reader | run-ledger + optimize wiring | 0024 | (Pipeline plan) | test_pipeline::optimize_paid_reader |
 | REQ-A1 | AIMD concurrency limiter | admission.py | 0014 | T7.1 | test_admission |
 | REQ-A2 | retryable-error allowlist (retry same maker) | admission.py | 0014 | T7.2 | test_admission::test_retry |
 | REQ-A3 | per-run cost ceiling | admission.py | 0014 | T7.2 | test_admission::test_ceiling |

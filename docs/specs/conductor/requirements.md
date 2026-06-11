@@ -64,6 +64,11 @@ Conductor lets a lean **orchestrator** (Claude main thread, or a host harness in
 - **REQ-R3** *(S10 determinism)* — THE SYSTEM SHALL make a routing decision a pure function of `(features, pinned profile snapshot, seed)`; live availability/rate-limit state SHALL live in the admission layer and SHALL NOT alter the recorded routing decision.
 - **REQ-R4** *(S6 sensitivity)* — WHEN a file is tagged `sensitivity=high`, THE SYSTEM SHALL NOT transmit its bytes to any tier1 free-cloud maker; it SHALL route only to local or Claude makers.
 
+### Role-model assignment (ADR-0024)
+- **REQ-RM1** — THE SYSTEM SHALL treat decomposer / verifier / maker (test-author, impl-author) / checker as **roles**, each assigned a model by a configurable `role_model_policy` keyed on (role, task-type, stakes) and chosen by **capability × cost × availability** — Claude Opus/Sonnet/Haiku (any class), OSS, or local. Paid models are first-class, not merely a fallback. The same model MAY serve multiple roles.
+- **REQ-RM2** *(the hard invariant)* — Every role-instance SHALL run in its own **bounded context** constructed from exactly its `SubtaskBrief`, never inheriting the main-thread history. Two roles MAY use the same model but SHALL NOT share context. (This — not model price — is the source of both the token saving and the localized-quality gain.)
+- **REQ-RM3** — THE SYSTEM SHALL record the model assigned to each role-instance in the run-ledger (for reproducibility, NFR-REPRO-1) and SHALL apply `optimize()` at a boundary only when the **reader is a paid model** (orchestrator-facing output, or a paid-model role's input brief); free/local-model inputs gain latency, not cost, so optimization there is optional.
+
 ### Admission (separate from routing)
 - **REQ-A1** *(S7)* — THE SYSTEM SHALL wrap each provider in an adaptive concurrency limiter that multiplicatively reduces in-flight cap on observed throttle, instead of escalating the batch.
 - **REQ-A2** — WHEN a maker call fails with a retryable error (429/timeout/5xx), THE SYSTEM SHALL retry the SAME maker with backoff; only a quality-gate miss or exhausted retries SHALL escalate.
@@ -85,7 +90,7 @@ Conductor lets a lean **orchestrator** (Claude main thread, or a host harness in
 - **REQ-OBS7** *(per-attempt run records)* — WHEN a unit is healed or escalated, THE SYSTEM SHALL append a distinct run record (attempt n, maker, outcome, summary) rather than overwriting status, preserving attempt history.
 
 ### Efficiency / compression (overlay)
-- **REQ-E1** *(S14a)* — THE SYSTEM SHALL support a caveman output mode for orchestrator replies (output-token reduction; reasoning untouched).
+- **REQ-E1** *(S14a)* — THE SYSTEM SHALL support a caveman output mode for orchestrator replies (output-token reduction; reasoning untouched). Per REQ-RM3, `optimize()` applies at any boundary whose **reader is a paid model** — orchestrator-facing output and paid-model role briefs — not just the orchestrator.
 - **REQ-E2** *(S14b)* — THE SYSTEM SHALL support `caveman-compress` on repeatedly-read prose artifacts, with deterministic validation that code, URLs, paths, and headings are byte-preserved.
 - **REQ-E3** *(S14, guard)* — THE SYSTEM SHALL NOT submit code, tests, `context_slices`, contract structured fields, or any gate-parsed evidence to compression; and SHALL refuse sensitive paths (.env/.ssh/.aws…).
 

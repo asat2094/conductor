@@ -1,6 +1,6 @@
 # ADR-0006: Tiered maker pool with bounded escalation 0→1→2, never straight to main
 
-- **Status:** Proposed
+- **Status:** Proposed — **generalized by [ADR-0024](./0024-roles-are-model-assignments-context-isolation-invariant.md)**: the "tiers" are capability/cost/availability bands (local · OSS · free-cloud · paid-Claude-class) that *every* role draws from, and the invariant is bounded-context isolation, not model price. "Free vs paid" here is shorthand.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-O1, REQ-C4 (escalation target)
 

@@ -36,3 +36,4 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0021](./0021-pluggable-context-optimizer.md) | Pluggable context-optimizer facade (baked-in defaults, opt-in backends) | Proposed |
 | [0022](./0022-codegraph-decomposition-verifier.md) | Codegraph-backed decomposition verifier (advisory, degrade-clean) | Proposed |
 | [0023](./0023-development-tracker-progress-board.md) | Development tracker / progress board (event-sourced, harness-derived, pluggable sinks) | Proposed |
+| [0024](./0024-roles-are-model-assignments-context-isolation-invariant.md) | Roles are model-assignments; bounded-context isolation (not price) is the invariant | Proposed (foundational) |
