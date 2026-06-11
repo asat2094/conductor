@@ -22,7 +22,10 @@ Introduce a codegraph-backed **verifier** as a **separate, advisory, degrade-cle
    - **Coverage signal (L4):** `% of declared edges corroborated` + list of unverifiable units.
    - **Density/decomposability signal (L2):** if the graph is near-complete / collapses to one coupled blob → advisory "not cleanly decomposable; prefer inline/interactive." **Advisory only — does not auto-route.**
 3. **Degrade-clean:** when codegraph is absent or errors, the verifier emits an explicit `unverified` status (logged) and the build proceeds on the lint-only gate — **REQ-D4 and S10 preserved**. The verifier never becomes a hard requirement.
-4. **Phase-aware:** at decompose time it checks `consumes` of *existing* symbols + file-locality coupling; `produces` of not-yet-written code are trusted now and re-verified post-wave (folds into the S4 seam check).
+4. **Phase-aware, wave-incremental (REQ-D9):** confidence *rises as waves complete*, so the verifier's posture is phase-dependent — it is not a global block-or-warn knob:
+   - **At decompose time** — downstream producers are unwritten; the verifier can only check declarations + *existing* repo symbols → **advisory (warn + proceed)** on in-DAG `produces`. Existing-symbol dangling/coupling is high-confidence even here and may ERROR.
+   - **At each wave boundary** — after wave N passes GREEN, re-index codegraph (incremental) on the accrued code; wave N+1's `consumes` are then checked against **real, gated, produced symbols** → **high-confidence → gating**: a unit whose consumes don't resolve against what waves ≤N actually produced is blocked/re-derived (that unit only), and a discovered same-wave coupling triggers a wave re-split. This folds into the S4 post-wave seam check.
+   Quality is therefore **self-improving wave-over-wave**: each wave builds on verified-correct code, so contract errors are caught against reality (not promises) and do not compound.
 
 ## Considered alternatives
 

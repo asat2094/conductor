@@ -18,6 +18,7 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-D6 | verifier: under-declared edge + dangling-vs-repo | verify.py | 0022 | (Plan 4) | test_verify::under_declared |
 | REQ-D7 | verifier: over-declared warning + coverage | verify.py | 0022 | (Plan 4) | test_verify::coverage |
 | REQ-D8 | advisory decomposability/density signal | verify.py | 0022 | (Plan 4) | test_verify::density |
+| REQ-D9 | wave-incremental verify (advisory→gating per wave) | verify.py + pipeline | 0022 | (Pipeline plan) | test_verify::wave_incremental |
 | NFR-VERIFY-1 | verifier advisory, degrade-clean, decompose() pure | verify.py | 0022 | (Plan 4) | test_verify::degrade_clean |
 | REQ-T1 | true RED (assertion cause, not import error) | evaluator RED | 0008 | T2.1 | test_red_gate |
 | REQ-T2 | author separation A≠B | dispatcher | 0007 | T2.2 | test_author_separation |
