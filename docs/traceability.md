@@ -46,6 +46,10 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-OBS2 | run-ledger replay | session_stats.py | 0015 | T10.2 | test_run_ledger |
 | REQ-OBS3 | regression ledger + repro injection | session_stats.py | 0008 | T9.2 | test_regression_ledger |
 | REQ-OBS4 | random higher-capability audit | ledger + audit hook | 0004 | T11.4 | test_audit |
+| REQ-OBS5 | dual-audience live board (projection) | tracker/state.py | 0023 | (Plan T) | test_tracker::board |
+| REQ-OBS6 | pluggable render sinks | tracker/render/* | 0023 | (Plan T) | test_tracker::sinks |
+| REQ-OBS7 | per-attempt run records | tracker/store.py | 0023 | (Plan T) | test_tracker::run_records |
+| NFR-TRACK-1 | harness-derived, reports-not-gates | tracker/* | 0023 | (Plan T) | test_tracker::harness_derived |
 | REQ-E1 | caveman output mode | orchestrator | 0019 | T14.1 | eval |
 | REQ-E2 | caveman-compress prose artifacts | compress.py | 0019 | T14.2 | test_compress |
 | REQ-E3 | prose-only compression guard | compress.py | 0019 | T14.2 | test_compress |

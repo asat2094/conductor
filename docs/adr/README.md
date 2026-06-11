@@ -35,3 +35,4 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0020](./0020-mcp-unifying-integration-surface.md) | MCP unifying integration surface | Proposed but Deferred (Phase 2) |
 | [0021](./0021-pluggable-context-optimizer.md) | Pluggable context-optimizer facade (baked-in defaults, opt-in backends) | Proposed |
 | [0022](./0022-codegraph-decomposition-verifier.md) | Codegraph-backed decomposition verifier (advisory, degrade-clean) | Proposed |
+| [0023](./0023-development-tracker-progress-board.md) | Development tracker / progress board (event-sourced, harness-derived, pluggable sinks) | Proposed |
