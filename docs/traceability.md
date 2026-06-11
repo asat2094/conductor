@@ -15,6 +15,10 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-D3 | lint_plan symbol/placeholder check | lint_plan.py | 0011 | T12.3 | test_lint_plan |
 | REQ-D4 | codegraph source + degrade path | codegraph_adapter.py | 0011 | T0.2 | test_codegraph_adapter |
 | REQ-D5 | DECOMPOSE is a hard gate | decompose.py | 0011 | T12.2 | test_compaction |
+| REQ-D6 | verifier: under-declared edge + dangling-vs-repo | verify.py | 0022 | (Plan 4) | test_verify::under_declared |
+| REQ-D7 | verifier: over-declared warning + coverage | verify.py | 0022 | (Plan 4) | test_verify::coverage |
+| REQ-D8 | advisory decomposability/density signal | verify.py | 0022 | (Plan 4) | test_verify::density |
+| NFR-VERIFY-1 | verifier advisory, degrade-clean, decompose() pure | verify.py | 0022 | (Plan 4) | test_verify::degrade_clean |
 | REQ-T1 | true RED (assertion cause, not import error) | evaluator RED | 0008 | T2.1 | test_red_gate |
 | REQ-T2 | author separation A≠B | dispatcher | 0007 | T2.2 | test_author_separation |
 | REQ-T3 | GREEN re-run unit + full suite | evaluator GREEN | 0009 | T11.1 | test_green_gate |

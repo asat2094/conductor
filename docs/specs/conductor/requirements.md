@@ -37,6 +37,9 @@ Conductor lets a lean **orchestrator** (Claude main thread, or a host harness in
 - **REQ-D3** — WHEN briefs are produced, THE SYSTEM SHALL run `lint_plan` to cross-reference every consumed symbol against an upstream producer/contract declaration and SHALL reject on dangling symbols or placeholders before dispatch.
 - **REQ-D4** *(B2)* — THE SYSTEM SHALL source codegraph from the codegraphcontext MCP; IF codegraph is unavailable or returns no edges THEN THE SYSTEM SHALL fall back to `logical_deps[]`-only coupling, and IF neither is available THEN to a single-unit no-decompose pass, logging the degrade.
 - **REQ-D5** — DECOMPOSE SHALL be a HARD-GATE phase: no unit dispatches until briefs are produced, `lint_plan`-clean, and the phase-boundary compaction has dropped read file bodies from orchestrator context.
+- **REQ-D6** *(verifier, L1/L3)* — WHEN codegraph edges are available, THE SYSTEM SHALL cross-check declared contracts against them and SHALL flag an **under-declared dependency** (a unit referencing a symbol owned by another unit with no declared `consumes`/edge) as an ERROR only when high-confidence, otherwise a warning; and SHALL flag a `consumes` of an existing symbol codegraph reports absent as an ERROR.
+- **REQ-D7** *(verifier coverage, L4)* — THE SYSTEM SHALL report an **over-declared** `consumes` (declared but never referenced) as a warning and SHALL emit a coverage metric (`% of declared edges corroborated by codegraph`) plus the list of unverifiable units.
+- **REQ-D8** *(decomposability signal, L2)* — THE SYSTEM SHALL emit an **advisory** decomposability signal when the dependency graph is near-complete / collapses to one densely-coupled blob ("prefer inline/interactive"); this signal SHALL NOT auto-route — it informs, the orchestrator decides.
 
 ### TDD gates
 - **REQ-T1** *(true RED)* — WHEN a unit test is authored, THE SYSTEM SHALL run it against current code and accept RED only IF the failure is an **assertion** failure whose captured cause matches the brief's declared expected behavior; import/collection/syntax errors SHALL be rejected as invalid RED.
@@ -92,6 +95,7 @@ Conductor lets a lean **orchestrator** (Claude main thread, or a host harness in
 - **NFR-SEC-1** *(data boundary)* — A unit is "high-stakes" IF it touches `sensitivity=high` files OR ≥ N coupled units OR a seam contract; high-stakes units trigger REQ-O3 review and REQ-C4 eligibility.
 - **NFR-REPRO-1** — Routing decisions and gate verdicts SHALL be replayable from the run-ledger; maker LLM sampling is acknowledged non-deterministic and out of replay scope.
 - **NFR-MIG-1** *(H4)* — Existing tests that assert superseded behavior (legacy `route()` 1.0 default; additive 25/35/20/20 evaluator axes) SHALL be explicitly migrated, not preserved; "keep green" applies only to unaffected tests.
+- **NFR-VERIFY-1** *(verifier stays advisory)* — The decomposition verifier (REQ-D6/D7/D8) SHALL be a separate layer that never mutates the DAG and never becomes a hard requirement: `decompose()` SHALL remain pure/deterministic given briefs; WHEN codegraph is absent or errors THE SYSTEM SHALL emit an explicit `unverified` status and proceed on the lint-only gate (preserving REQ-D4 and NFR-REPRO-1). The verifier is bounded by static-analysis accuracy — dynamic/reflective coupling it cannot see remains a recorded residual, not a closed gap.
 
 ---
 
