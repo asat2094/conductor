@@ -12,7 +12,7 @@ from typing import Optional
 @dataclass
 class VerifyReport:
     status: str = "unverified"
-    errors: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)   # reserved for ERROR-level findings (REQ-D6 high-confidence / dangling-vs-repo) — empty in this advisory slice; wave-incremental gating (REQ-D9) populates it
     warnings: list[str] = field(default_factory=list)
     coverage: float = 0.0
     dense: bool = False

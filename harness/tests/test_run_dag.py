@@ -58,3 +58,14 @@ def test_run_dag_raises_clean_on_bad_decomposition():
 def test_run_dag_attaches_verify_report():
     res = run_dag([A, B], workdir=".", process_unit=lambda s, w: _FakeVerdict(90))
     assert res.verify.status == "unverified"
+
+
+def test_run_dag_routed_to_claude_marks_inline_escalated():
+    class _Escalated:
+        final_score = -1
+        agent_used = "claude_agent"
+        routed_to_claude = True
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: _Escalated())
+    assert res.board["a"]["state"] == UnitState.INLINE
+    assert res.board["a"].get("escalated") is True
+    assert res.inline == 1

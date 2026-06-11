@@ -39,4 +39,6 @@ def brief_to_messages(brief: dict[str, Any]) -> list[dict[str, str]]:
         f"Consumes: {', '.join(contract.get('consumes', []))}\n"
         f"Verify: {brief.get('verify_cmd', '')}"
     )
+    # NOTE: context_slices are intentionally not inlined yet — the retrieve/optimizer path
+    # (REQ-RM3) that cuts + compresses slices into the message is wired in a follow-on plan.
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
