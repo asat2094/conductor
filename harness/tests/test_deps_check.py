@@ -32,3 +32,18 @@ def test_multiple_names_mixed():
 
 def test_empty_list():
     assert check_dependencies([], resolver=lambda n: True) == {}
+
+
+def test_invalid_name_with_slash_rejected_without_resolver():
+    called = []
+    res = check_dependencies(["foo/bar", "../evil", "a b", "pkg?x=1"], resolver=lambda n: called.append(n) or True)
+    assert res["foo/bar"] == "invalid"
+    assert res["../evil"] == "invalid"
+    assert res["a b"] == "invalid"
+    assert res["pkg?x=1"] == "invalid"
+    assert called == []   # resolver never called for invalid names (no SSRF)
+
+
+def test_valid_names_still_pass():
+    res = check_dependencies(["requests", "ruamel.yaml", "typing-extensions", "Django"], resolver=lambda n: True)
+    assert all(v == "ok" for v in res.values())
