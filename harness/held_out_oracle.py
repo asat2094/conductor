@@ -3,13 +3,16 @@ Held-out acceptance oracle (ADR-0026, REQ-T12). A spec/human-derived acceptance 
 NEVER sees (stripped from its visible context). Run only at the acceptance boundary via an injected
 runner. Mandatory for high-stakes units; optional (falls back to in-loop GREEN) otherwise.
 """
+import os
 from typing import Callable, Optional
 
 
 def strip_oracle_from_context(visible_files: list[str], oracle_paths: list[str]) -> list[str]:
-    """Remove held-out oracle paths from what the impl-maker is allowed to see."""
-    blocked = set(oracle_paths)
-    return [f for f in visible_files if f not in blocked]
+    """Remove held-out oracle paths from what the impl-maker sees. Paths are normalized
+    (os.path.normpath) on both sides so './tests/x.py' and 'tests/x.py' compare equal — a
+    mismatch here would leak the oracle, so normalization is a security requirement."""
+    blocked = {os.path.normpath(p) for p in oracle_paths}
+    return [f for f in visible_files if os.path.normpath(f) not in blocked]
 
 
 def run_oracle(oracle_cmd: str, runner: Callable[[str], bool]) -> bool:

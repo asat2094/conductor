@@ -28,3 +28,10 @@ def test_accept_high_stakes_requires_oracle_present():
 def test_accept_low_stakes_allows_missing_oracle():
     # low-stakes: oracle optional; missing (None) falls back to in-loop green
     assert accept(in_loop_green=True, oracle_passed=None, high_stakes=False) is True
+
+
+def test_strip_normalizes_paths_before_comparing():
+    # oracle declared as 'tests/oracle_m.py' must still be stripped when visible list uses './tests/oracle_m.py'
+    visible = strip_oracle_from_context(["m.py", "./tests/oracle_m.py", "tests/./oracle_m.py"], oracle_paths=["tests/oracle_m.py"])
+    assert all("oracle_m.py" not in f for f in visible)
+    assert "m.py" in visible
