@@ -28,6 +28,14 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-T6 | property-driven characterization | characterize.sh, evaluator | 0010 | T3.1, T3.2 | test_characterization |
 | REQ-T7 | behavior-binding (assert on contract surface) | evaluator | 0008 | T11.3 | test_behavior_binding |
 | REQ-T8 | RED test immutable across RED→GREEN | evaluator | 0008/0009 | T2.1, T11.1 | test_green_gate |
+| REQ-T10 | property-based gate (Hypothesis) | evaluator PBT tier | 0025 | (PBT plan) | test_pbt_gate::counterexample |
+| REQ-T11 | metamorphic relations | evaluator PBT tier | 0025 | (PBT plan) | test_pbt_gate::metamorphic |
+| REQ-T12 | held-out acceptance oracle | evaluator + oracle path | 0026 | (oracle plan) | test_held_out_oracle |
+| REQ-T13 | anti-reward-hacking scope guard | evaluator scope check | 0026 | (oracle plan) | test_scope_guard::reward_hack |
+| REQ-A4 | dependency-existence (slopsquatting) | deps_check.py | 0026 | (deps plan) | test_deps_check |
+| REQ-H1 | repair loop mechanical-stop only | healer.py | 0027 | (loop plan) | test_repair_loop::no_soft_gate |
+| REQ-H2 | stuck-detection | healer.py | 0027 | (loop plan) | test_repair_loop::stuck |
+| REQ-H3 | repair loop hard caps + mechanical feedback | healer.py | 0027 | (loop plan) | test_repair_loop::caps |
 | REQ-C1 | no maker self-report as evidence | evaluator | 0002 | T11.3 | test_confidence |
 | REQ-C2 | mechanical gates 100%, model-last | evaluator | 0003 | T11.3 | test_confidence |
 | REQ-C3 | confidence ≥0.95 accept / hard-fail reject | evaluator stop-judger | 0003 | T11.3 | test_confidence |

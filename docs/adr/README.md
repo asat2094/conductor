@@ -37,3 +37,6 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0022](./0022-codegraph-decomposition-verifier.md) | Codegraph-backed decomposition verifier (advisory, degrade-clean) | Proposed |
 | [0023](./0023-development-tracker-progress-board.md) | Development tracker / progress board (event-sourced, harness-derived, pluggable sinks) | Proposed |
 | [0024](./0024-roles-are-model-assignments-context-isolation-invariant.md) | Roles are model-assignments; bounded-context isolation (not price) is the invariant | Proposed (foundational) |
+| [0025](./0025-property-based-metamorphic-gate.md) | Property-based + metamorphic testing as a first-class checker tier | Proposed |
+| [0026](./0026-held-out-acceptance-oracle.md) | Held-out acceptance oracle + anti-reward-hacking scope guard + dependency-existence check | Proposed |
+| [0027](./0027-bounded-repair-loop.md) | Bounded per-unit repair loop with mechanical stop conditions ("loops", done safely) | Proposed |
