@@ -169,10 +169,18 @@ class LiveMaker:
         # 3. Call model
         raw_text = self._model_caller(spec, prompt)
 
-        # 4. Extract FILE blocks and write them
+        # 4. Extract FILE blocks and write them — but ONLY files the unit is allowed to write.
+        #    A maker that emits a file outside its declared writes_files (e.g. rewriting its own
+        #    test) is a scope leak; we drop those writes mechanically (ADR-0011/0013). When the
+        #    subtask declares no writes_files, fall back to permitting all (best-effort).
         file_map = extract_files(raw_text)
+        allowed = set(getattr(subtask, "writes_files", None) or [])
         changed: list[str] = []
+        self.rejected_writes: list[str] = []
         for rel_path, content in file_map.items():
+            if allowed and rel_path not in allowed:
+                self.rejected_writes.append(rel_path)
+                continue
             self._write_file(rel_path, content)
             changed.append(rel_path)
 

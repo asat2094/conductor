@@ -67,3 +67,21 @@ def test_make_live_maker_factory_is_process_unit_compatible(tmp_path):
                             test_runner=lambda cmd, wd: (0, ""), differ=lambda wd, paths: "")
     art = maker(_subtask(), str(tmp_path), None)   # signature: (subtask, workdir, feedback)
     assert isinstance(art, UnitArtifact)
+
+
+def test_make_drops_writes_outside_declared_writes_files(tmp_path):
+    # maker emits TWO files but the unit only declares calc.py writable -> the test file is dropped
+    from types import SimpleNamespace
+    model = lambda spec, prompt: (
+        "=== FILE: calc.py ===\ndef add(a,b): return a+b\n=== END ===\n"
+        "=== FILE: test_calc.py ===\ndef test_add(): assert False\n=== END ==="
+    )
+    lm = LiveMaker(str(tmp_path), role="impl_author", model_caller=model,
+                   test_runner=lambda cmd, wd: (0, ""), differ=lambda wd, paths: "")
+    sub = SimpleNamespace(id="u", description="d", type=SimpleNamespace(value="code_gen"),
+                          files=["calc.py", "test_calc.py"], writes_files=["calc.py"],
+                          produces=["add"], consumes=[])
+    art = lm.make(sub, None)
+    assert art.changed_files == ["calc.py"]              # only declared file written
+    assert "test_calc.py" in lm.rejected_writes          # scope leak dropped
+    assert not (tmp_path / "test_calc.py").exists()
