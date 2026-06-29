@@ -15,11 +15,11 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-D3 | lint_plan symbol/placeholder check | lint_plan.py | 0011 | T12.3 | test_lint_plan |
 | REQ-D4 | codegraph source + degrade path | codegraph_adapter.py | 0011 | T0.2 | test_codegraph_adapter |
 | REQ-D5 | DECOMPOSE is a hard gate | decompose.py | 0011 | T12.2 | test_compaction |
-| REQ-D6 | verifier: under-declared edge + dangling-vs-repo | verify.py | 0022 | (Plan 4) | test_verify::under_declared |
-| REQ-D7 | verifier: over-declared warning + coverage | verify.py | 0022 | (Plan 4) | test_verify::coverage |
-| REQ-D8 | advisory decomposability/density signal | verify.py | 0022 | (Plan 4) | test_verify::density |
-| REQ-D9 | wave-incremental verify (advisory→gating per wave) | verify.py + pipeline | 0022 | (Pipeline plan) | test_verify::wave_incremental |
-| NFR-VERIFY-1 | verifier advisory, degrade-clean, decompose() pure | verify.py | 0022 | (Plan 4) | test_verify::degrade_clean |
+| REQ-D6 | verifier: under-declared edge + dangling-vs-repo | verify.py | 0022 | built | test_verify::under_declared |
+| REQ-D7 | verifier: over-declared warning + coverage | verify.py | 0022 | built | test_verify::coverage |
+| REQ-D8 | advisory decomposability/density signal | verify.py | 0022 | built | test_verify::density |
+| REQ-D9 | wave-incremental verify (advisory→gating per wave) | verify.py + pipeline | 0022 | built | test_verify::wave_incremental |
+| NFR-VERIFY-1 | verifier advisory, degrade-clean, decompose() pure | verify.py | 0022 | built | test_verify::degrade_clean |
 | REQ-T1 | true RED (assertion cause, not import error) | evaluator RED | 0008 | T2.1 | test_red_gate |
 | REQ-T2 | author separation A≠B | dispatcher | 0007 | T2.2 | test_author_separation |
 | REQ-T3 | GREEN re-run unit + full suite | evaluator GREEN | 0009 | T11.1 | test_green_gate |
@@ -28,14 +28,14 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-T6 | property-driven characterization | characterize.sh, evaluator | 0010 | T3.1, T3.2 | test_characterization |
 | REQ-T7 | behavior-binding (assert on contract surface) | evaluator | 0008 | T11.3 | test_behavior_binding |
 | REQ-T8 | RED test immutable across RED→GREEN | evaluator | 0008/0009 | T2.1, T11.1 | test_green_gate |
-| REQ-T10 | property-based gate (Hypothesis) | evaluator PBT tier | 0025 | (PBT plan) | test_pbt_gate::counterexample |
-| REQ-T11 | metamorphic relations | evaluator PBT tier | 0025 | (PBT plan) | test_pbt_gate::metamorphic |
-| REQ-T12 | held-out acceptance oracle | evaluator + oracle path | 0026 | (oracle plan) | test_held_out_oracle |
-| REQ-T13 | anti-reward-hacking scope guard | evaluator scope check | 0026 | (oracle plan) | test_scope_guard::reward_hack |
-| REQ-A4 | dependency-existence (slopsquatting) | deps_check.py | 0026 | (deps plan) | test_deps_check |
-| REQ-H1 | repair loop mechanical-stop only | healer.py | 0027 | (loop plan) | test_repair_loop::no_soft_gate |
-| REQ-H2 | stuck-detection | healer.py | 0027 | (loop plan) | test_repair_loop::stuck |
-| REQ-H3 | repair loop hard caps + mechanical feedback | healer.py | 0027 | (loop plan) | test_repair_loop::caps |
+| REQ-T10 | property-based gate (Hypothesis) | evaluator PBT tier | 0025 | built | test_pbt_gate::counterexample |
+| REQ-T11 | metamorphic relations | evaluator PBT tier | 0025 | built | test_pbt_gate::metamorphic |
+| REQ-T12 | held-out acceptance oracle | evaluator + oracle path | 0026 | built | test_held_out_oracle |
+| REQ-T13 | anti-reward-hacking scope guard | evaluator scope check | 0026 | built | test_scope_guard::reward_hack |
+| REQ-A4 | dependency-existence (slopsquatting) | deps_check.py | 0026 | built | test_deps_check |
+| REQ-H1 | repair loop mechanical-stop only | healer.py | 0027 | built | test_repair_loop::no_soft_gate |
+| REQ-H2 | stuck-detection | healer.py | 0027 | built | test_repair_loop::stuck |
+| REQ-H3 | repair loop hard caps + mechanical feedback | healer.py | 0027 | built | test_repair_loop::caps |
 | REQ-C1 | no maker self-report as evidence | evaluator | 0002 | T11.3 | test_confidence |
 | REQ-C2 | mechanical gates 100%, model-last | evaluator | 0003 | T11.3 | test_confidence |
 | REQ-C3 | confidence ≥0.95 accept / hard-fail reject | evaluator stop-judger | 0003 | T11.3 | test_confidence |
@@ -44,9 +44,9 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-R2 | cold-start no 1.0 default | router.py, profiles.py | 0015 | T9.1 | test_router::test_cold_start_no_1_0 |
 | REQ-R3 | deterministic routing (pinned snapshot+seed) | router.py | 0015 | T10.1 | test_router::test_deterministic |
 | REQ-R4 | sensitivity hard-rule | router.py | 0017 | T6.1 | test_router::test_sensitivity |
-| REQ-RM1 | roles=model assignments (role_model_policy) | router/role_policy | 0024 | (Pipeline plan) | test_role_policy::assign |
-| REQ-RM2 | bounded-context isolation invariant | dispatch/workspace | 0024 | (Pipeline plan) | test_dispatch::isolated_context |
-| REQ-RM3 | log assigned model; optimize iff paid reader | run-ledger + optimize wiring | 0024 | (Pipeline plan) | test_pipeline::optimize_paid_reader |
+| REQ-RM1 | roles=model assignments (role_model_policy) | router/role_policy | 0024 | built | test_role_policy::assign |
+| REQ-RM2 | bounded-context isolation invariant | dispatch/workspace | 0024 | built | test_dispatch::isolated_context |
+| REQ-RM3 | log assigned model; optimize iff paid reader | run-ledger + optimize wiring | 0024 | built | test_pipeline::optimize_paid_reader |
 | REQ-A1 | AIMD concurrency limiter | admission.py | 0014 | T7.1 | test_admission |
 | REQ-A2 | retryable-error allowlist (retry same maker) | admission.py | 0014 | T7.2 | test_admission::test_retry |
 | REQ-A3 | per-run cost ceiling | admission.py | 0014 | T7.2 | test_admission::test_ceiling |
@@ -58,10 +58,10 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-OBS2 | run-ledger replay | session_stats.py | 0015 | T10.2 | test_run_ledger |
 | REQ-OBS3 | regression ledger + repro injection | session_stats.py | 0008 | T9.2 | test_regression_ledger |
 | REQ-OBS4 | random higher-capability audit | ledger + audit hook | 0004 | T11.4 | test_audit |
-| REQ-OBS5 | dual-audience live board (projection) | tracker/state.py | 0023 | (Plan T) | test_tracker::board |
-| REQ-OBS6 | pluggable render sinks | tracker/render/* | 0023 | (Plan T) | test_tracker::sinks |
-| REQ-OBS7 | per-attempt run records | tracker/store.py | 0023 | (Plan T) | test_tracker::run_records |
-| NFR-TRACK-1 | harness-derived, reports-not-gates | tracker/* | 0023 | (Plan T) | test_tracker::harness_derived |
+| REQ-OBS5 | dual-audience live board (projection) | tracker/state.py | 0023 | built | test_tracker::board |
+| REQ-OBS6 | pluggable render sinks | tracker/render/* | 0023 | built | test_tracker::sinks |
+| REQ-OBS7 | per-attempt run records | tracker/store.py | 0023 | built | test_tracker::run_records |
+| NFR-TRACK-1 | harness-derived, reports-not-gates | tracker/* | 0023 | built | test_tracker::harness_derived |
 | REQ-E1 | caveman output mode | orchestrator | 0019 | T14.1 | eval |
 | REQ-E2 | caveman-compress prose artifacts | compress.py | 0019 | T14.2 | test_compress |
 | REQ-E3 | prose-only compression guard | compress.py | 0019 | T14.2 | test_compress |
