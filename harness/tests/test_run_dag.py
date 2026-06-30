@@ -96,3 +96,35 @@ def test_run_dag_reverify_runs_at_wave_boundary():
     res = run_dag([B, A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), reverify=rv)
     assert calls["n"] == 2            # two waves -> two boundary re-verifies
     assert res.verify.status == "verified"
+
+
+def test_run_dag_fail_fast_aborts_remaining_waves():
+    seen = []
+    def proc(st, w):
+        seen.append(st.id)
+        return _FakeVerdict(10)   # everything fails
+    # B depends on A; fail_fast should stop after A fails, never dispatch B
+    res = run_dag([B, A], workdir=".", process_unit=proc, failure_mode="fail_fast")
+    assert seen == ["a"]                # B never dispatched
+    assert res.assembly == "discard"
+
+
+def test_run_dag_all_or_nothing_discards_on_any_failure():
+    def proc(st, w):
+        return _FakeVerdict(90) if st.id == "a" else _FakeVerdict(10)
+    res = run_dag([A, B], workdir=".", process_unit=proc, failure_mode="all_or_nothing")
+    assert res.failed == 1
+    assert res.assembly == "discard"    # one failure discards the whole build
+
+
+def test_run_dag_resume_skips_accepted_units():
+    from harness.checkpoint import make_checkpoint
+    ckpt = make_checkpoint({"a": {"state": "ACCEPTED"}})
+    dispatched = []
+    def proc(st, w):
+        dispatched.append(st.id)
+        return _FakeVerdict(90)
+    res = run_dag([B, A], workdir=".", process_unit=proc, resume_from=ckpt)
+    assert "a" not in dispatched         # already-accepted 'a' skipped
+    assert "b" in dispatched
+    assert res.board["a"]["state"] == "ACCEPTED" and res.board["a"].get("resumed") is True
