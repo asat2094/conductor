@@ -32,6 +32,7 @@ class DagRunResult:
     failed: int = 0
     inline: int = 0
     verdicts: dict[str, Any] = field(default_factory=dict)
+    assembly: Optional[str] = None   # merge-queue disposition: "ff_to_target" | "discard" | None
 
 
 def _default_process_unit(subtask: Any, workdir: str) -> Any:
@@ -47,7 +48,13 @@ def run_dag(
     tracker: Optional[Tracker] = None,
     edges: Optional[dict] = None,
     accept_threshold: int = 70,
+    merge_queue: Optional[Any] = None,
+    reverify: Optional[Callable] = None,
 ) -> DagRunResult:
+    """Decompose -> verify -> per-wave [cost_skip -> dispatch -> track]. Optional integration:
+    `merge_queue` (ADR-0004/0012): each ACCEPTED unit is submitted; finalize() decides ff/discard.
+    `reverify(by_id_briefs, accepted_so_far) -> VerifyReport` (REQ-D9): re-run at each wave boundary
+    against accrued GREEN code; its status is recorded on the result. Both default off (backward-compat)."""
     process_unit = process_unit or _default_process_unit
     tracker = tracker or Tracker()
 
@@ -56,6 +63,7 @@ def run_dag(
     by_id = {b["id"]: b for b in briefs}
 
     accepted = failed = inline = 0
+    accepted_ids: list[str] = []
     verdicts: dict[str, Any] = {}
     for wave in waves:
         for uid in wave:
@@ -72,13 +80,30 @@ def run_dag(
                 tracker.record(uid, UnitState.INLINE, escalated=True)
                 inline += 1
             elif getattr(verdict, "final_score", 0) >= accept_threshold:
+                # merge-queue gate (single-writer + full-suite); only count accepted if it merges clean
+                if merge_queue is not None:
+                    mr = merge_queue.submit(uid)
+                    if not getattr(mr, "merged", True):
+                        tracker.record(uid, UnitState.FAILED, score=getattr(verdict, "final_score", 0), merge="rejected")
+                        failed += 1
+                        continue
                 tracker.record(uid, UnitState.ACCEPTED, score=verdict.final_score, maker=getattr(verdict, "agent_used", "?"))
                 accepted += 1
+                accepted_ids.append(uid)
             else:
                 tracker.record(uid, UnitState.FAILED, score=getattr(verdict, "final_score", 0))
                 failed += 1
+        # wave boundary: re-verify the next wave against accrued GREEN code (REQ-D9)
+        if reverify is not None:
+            report = reverify(by_id, list(accepted_ids))
+
+    # DAG-atomic finalize (ADR-0004/0012, REQ-I2): ff to target only if whole DAG clean
+    assembly = None
+    if merge_queue is not None:
+        assembly = merge_queue.finalize(assembly_ok=(failed == 0))
 
     return DagRunResult(
         waves=waves, board=tracker.board(), verify=report,
         accepted=accepted, failed=failed, inline=inline, verdicts=verdicts,
+        assembly=assembly,
     )

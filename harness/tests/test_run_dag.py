@@ -69,3 +69,30 @@ def test_run_dag_routed_to_claude_marks_inline_escalated():
     assert res.board["a"]["state"] == UnitState.INLINE
     assert res.board["a"].get("escalated") is True
     assert res.inline == 1
+
+
+def test_run_dag_merge_queue_finalizes_ff_when_clean():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), merge_queue=mq)
+    assert res.assembly == "ff_to_target"
+    assert res.accepted == 1
+
+
+def test_run_dag_merge_queue_discards_on_suite_regression():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (False, "sibling broke"), merger=lambda u: (True, ""))
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), merge_queue=mq)
+    assert res.assembly == "discard"      # merge-queue full-suite caught a regression a per-unit gate missed
+    assert res.accepted == 0 and res.failed == 1
+
+
+def test_run_dag_reverify_runs_at_wave_boundary():
+    calls = {"n": 0}
+    def rv(by_id, accepted):
+        calls["n"] += 1
+        from harness.verify import VerifyReport
+        return VerifyReport(status="verified")
+    res = run_dag([B, A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), reverify=rv)
+    assert calls["n"] == 2            # two waves -> two boundary re-verifies
+    assert res.verify.status == "verified"
