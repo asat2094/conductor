@@ -98,3 +98,15 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 | REQ-D11 | spec-completeness probes (advisory, gate-feeding) | decompose pre-pass | 0032 | proposed |
 | REQ-E4 | CCR reversible retrieve (optimizer capability) | optimizer backend | 0033 | proposed |
 | REQ-A5 | budget audit｜enforce + sub-build rollup | admission | 0034 | proposed |
+
+## Language-agnostic + style + onboarding (ADR-0035–0037, design-only pending build)
+
+| REQ | Requirement (short) | Design component | ADR | Status |
+|---|---|---|---|---|
+| REQ-LANG1 | LanguageAdapter protocol covers all language-specific ops | lang/base.py | 0035 | proposed |
+| REQ-LANG2 | base system never branches on language (single adapter seam) | gates delegate to adapter | 0035 | proposed |
+| REQ-LANG3 | registry + generic fallback; python + ≥1 more adapter | lang/registry, python, javascript, generic | 0035 | proposed |
+| REQ-STYLE1 | repo-native lint/format run as a mechanical gate | style_gate.py | 0036 | proposed |
+| REQ-STYLE2 | degrade-clean when no style tooling; never invent standards | style_gate.py | 0036 | proposed |
+| REQ-ONB1 | detect language/test/lint/format/codegraph/standards | repo_profile.py | 0037 | proposed |
+| REQ-ONB2 | detect-then-override; degrade-clean on gaps | repo_profile.py | 0037 | proposed |

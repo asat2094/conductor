@@ -43,6 +43,9 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0032](./0032-spec-completeness-probes.md) | Spec-completeness probes (Edge/Prohibition) — advisory, gate-feeding | Proposed |
 | [0033](./0033-ccr-reversible-retrieve.md) | CCR reversible-retrieve as an optimizer capability | Proposed |
 | [0034](./0034-budget-audit-enforce-rollup.md) | Budget audit｜enforce modes + sub-build spend rollup | Proposed |
+| [0035](./0035-pluggable-language-adapters.md) | Pluggable language adapters (language-agnostic base, swappable block) | Proposed (supersedes NFR-SCOPE-1) |
+| [0036](./0036-repo-native-style-gate.md) | Repo-native style gate (repo's own lint/format = mechanical oracle) | Proposed |
+| [0037](./0037-repo-onboarding-profile.md) | Repo onboarding / profile (detect language, tooling, standards) | Proposed |
 
 > **Borrow provenance (2026-06-30):** ADR-0028/0029/0031/0034 ← microsoft/conductor (patterns, MIT); 0030/0032 ← gsd-core; 0033 ← headroom. All re-implemented in-stack, vendor-neutral. **Explicitly NOT borrowed** (hampers core): LLM-judge `validator`/`dialog` gating (Law-1 violation), static per-agent model choice (router is superior), ensemble/multi-round debate (net-negative, ADR-0004 amendment), continuous autonomous loop, gsd Nyquist coverage-finder (declined — most model-trust-adjacent). **Deferred:** real-time web dashboard, capability-registry plugin contract, CacheAligner.
 | [0024](./0024-roles-are-model-assignments-context-isolation-invariant.md) | Roles are model-assignments; bounded-context isolation (not price) is the invariant | Proposed (foundational) |
