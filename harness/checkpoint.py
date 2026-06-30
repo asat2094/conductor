@@ -6,6 +6,7 @@ resume re-runs un-accepted units (maker output non-deterministic).
 Pure functions over a board/event projection (no real DB).
 """
 
+import copy
 import json
 
 
@@ -22,7 +23,8 @@ def make_checkpoint(board: dict) -> dict:
     """
     accepted = [unit_id for unit_id, unit_state in board.items()
                 if unit_state.get("state") == "ACCEPTED"]
-    return {"accepted": accepted, "board": board}
+    # deep-copy so a post-snapshot mutation of the board can't alter the captured checkpoint
+    return {"accepted": accepted, "board": copy.deepcopy(board)}
 
 
 def save_checkpoint(ckpt: dict, path: str, *, dumper=None) -> None:

@@ -35,10 +35,18 @@ def edge_probe(brief: dict, *, prober: Optional[Callable] = None) -> list[str]:
         - Otherwise return deterministic default criteria.
         - Does NOT mutate input.
     """
+    default = _default_edges(brief)
     if prober is not None:
-        return prober(brief, EDGE_CATEGORIES)
+        # ADVISORY guarantee (ADR-0032): a misbehaving prober must NEVER block the caller —
+        # degrade to the deterministic default on any exception.
+        try:
+            return prober(brief, EDGE_CATEGORIES)
+        except Exception:
+            return default
+    return default
 
-    # Deterministic default: template each category against goal
+
+def _default_edges(brief: dict) -> list[str]:
     goal = brief.get("goal", "operation")
     return [
         f"boundary: verify {goal} handles boundary inputs",
@@ -69,17 +77,19 @@ def prohibition_probe(brief: dict, *, prober: Optional[Callable] = None) -> list
         - Otherwise return deterministic default prohibitions.
         - Does NOT mutate input.
     """
-    if prober is not None:
-        return prober(brief, EDGE_CATEGORIES)
-
-    # Deterministic default: universal prohibitions
-    return [
+    default = [
         "must not crash on empty input",
         "must not mutate input parameters",
         "must not silently ignore errors",
         "must not leak secrets in error messages",
         "must not block indefinitely on concurrent access",
     ]
+    if prober is not None:
+        try:  # advisory must never block (ADR-0032)
+            return prober(brief, EDGE_CATEGORIES)
+        except Exception:
+            return default
+    return default
 
 
 def annotate_brief(brief: dict, *, prober: Optional[Callable] = None) -> dict:
@@ -102,7 +112,7 @@ def annotate_brief(brief: dict, *, prober: Optional[Callable] = None) -> dict:
         - Returned dict is a shallow copy with new "candidate_criteria" key.
         - candidate_criteria is ADVISORY only — never used as gate evidence.
     """
-    out = copy.copy(brief)
+    out = copy.deepcopy(brief)   # deep copy so nested fields can't bleed back into the input
     out["candidate_criteria"] = {
         "edges": edge_probe(brief, prober=prober),
         "prohibitions": prohibition_probe(brief, prober=prober),

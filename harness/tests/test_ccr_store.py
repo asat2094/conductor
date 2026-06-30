@@ -32,3 +32,12 @@ def test_retrieve_expired_is_none():
 def test_different_content_different_handle():
     s = CCRStore()
     assert s.store("a") != s.store("b")
+
+
+def test_handles_excludes_expired():
+    t = {"now": 0.0}
+    s = CCRStore(ttl_seconds=100, clock=lambda: t["now"])
+    h = s.store("x")
+    assert h in s.handles()
+    t["now"] = 200.0
+    assert s.handles() == []            # expired handle excluded (matches retrieve)

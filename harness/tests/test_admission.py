@@ -64,3 +64,10 @@ def test_warn_unpriced_is_one_time():
     c.warn_unpriced("mystery-model")
     c.warn_unpriced("mystery-model")
     assert sum("mystery-model" in w for w in c.warnings) == 1
+
+
+def test_rollup_returns_false_when_enforce_blocks():
+    c = CostCeiling(limit=100, mode="enforce")
+    c.spend(80)
+    assert c.rollup(30) is False        # blocked child rollup is visible, not silent
+    assert c.spent == 80

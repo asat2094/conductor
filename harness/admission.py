@@ -100,9 +100,10 @@ class CostCeiling:
         self._spent += amount
         return True
 
-    def rollup(self, child_spent: int) -> None:
-        """Roll a sub-build's spend up into this (parent) ceiling (ADR-0034)."""
-        self.spend(child_spent)
+    def rollup(self, child_spent: int) -> bool:
+        """Roll a sub-build's spend up into this (parent) ceiling (ADR-0034). Returns the spend()
+        result so the caller can detect a blocked rollup in enforce mode (not silently dropped)."""
+        return self.spend(child_spent)
 
     def warn_unpriced(self, model: str) -> None:
         """One-time warning for a model with no price entry (don't silently count it free)."""

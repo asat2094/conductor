@@ -82,12 +82,7 @@ class CCRStore:
         return original
 
     def handles(self) -> list[str]:
-        """Return list of all handles currently in store (non-expired at call time).
-
-        Note: Expired entries are not pruned automatically; this list includes
-        all keys, regardless of TTL status at retrieval time.
-
-        Returns:
-            List of handle strings.
-        """
-        return list(self._store.keys())
+        """Return handles that are still live (non-expired at call time). Expired entries are
+        excluded so the list matches what retrieve() would actually return."""
+        now = self._clock()
+        return [h for h, (_, ts) in self._store.items() if (now - ts) <= self._ttl_seconds]

@@ -27,3 +27,19 @@ def test_annotate_brief_is_advisory_and_pure():
     assert "prohibitions" in out["candidate_criteria"]
     assert out["candidate_criteria"]["dismissed"] == []
     assert out["id"] == "u1"                            # original fields preserved
+
+
+def test_prober_exception_degrades_to_default_never_blocks():
+    # a misbehaving prober must NOT block annotate_brief (advisory-only, ADR-0032)
+    def boom(brief, cats):
+        raise RuntimeError("prober down")
+    out = annotate_brief({"id": "u", "goal": "g"}, prober=boom)
+    assert out["candidate_criteria"]["edges"]          # fell back to deterministic default
+    assert out["candidate_criteria"]["prohibitions"]
+
+
+def test_annotate_deep_copy_no_nested_bleed():
+    brief = {"id": "u", "goal": "g", "files": ["a.py"]}
+    out = annotate_brief(brief)
+    out["files"].append("leak.py")
+    assert brief["files"] == ["a.py"]                  # nested mutation does not bleed back
