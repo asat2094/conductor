@@ -197,3 +197,13 @@ class TrackerStore:
             fn: Callable that accepts event dict {unit_id, state, meta, ts}.
         """
         self._sinks.append(fn)
+
+    def rollup(self) -> dict:
+        """Count units per latest state (REQ-OBS5)."""
+        from harness.progress import rollup_of
+        return rollup_of(self.board())
+
+    def render_text(self) -> str:
+        """Human program-manager table — makes TrackerStore drop-in for Tracker (REQ-OBS5)."""
+        from harness.progress import render_board
+        return render_board(self.board())

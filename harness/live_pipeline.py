@@ -44,12 +44,31 @@ def build_live(
     policy: Optional[dict] = None,
     edges: Optional[dict] = None,
     max_attempts: int = 3,
+    progress: bool = True,
+    progress_path: Optional[str] = None,
+    db_path: str = ":memory:",
     **maker_kw: Any,
 ):
-    """One-call live build: decompose -> verify -> per-wave dispatch through REAL makers.
-    Returns (DagRunResult, Tracker). maker_kw flows to the live maker (model_caller/test_runner/... )."""
+    """One-call live build: decompose -> verify -> per-wave dispatch through REAL makers, with LIVE
+    progress tracking (ADR-0023). Returns (DagRunResult, TrackerStore).
+
+    progress=True streams a program-manager view as each unit changes state (DISPATCHED -> HEALING ->
+    ACCEPTED/FAILED, with maker + attempt). progress_path writes the same events as JSONL for an
+    external PM/kanban tool to tail (the external-dependency path). db_path persists the event log.
+    The board is harness-derived (NFR-TRACK-1) — a sink reports, it never changes a verdict."""
+    from harness.run_dag import run_dag
+    from harness.tracker_store import TrackerStore
+    from harness.progress import live_sink, jsonl_sink
+
+    store = TrackerStore(db_path)
+    if progress:
+        store.add_sink(live_sink())
+    if progress_path:
+        store.add_sink(jsonl_sink(progress_path))
+
     proc = make_live_processor(policy=policy, max_attempts=max_attempts, **maker_kw)
-    return build(briefs, workdir=workdir, process_unit=proc, edges=edges)
+    result = run_dag(briefs, workdir=workdir, process_unit=proc, tracker=store, edges=edges)
+    return result, store
 
 
 __all__ = ["make_live_processor", "build_live", "build_report"]
