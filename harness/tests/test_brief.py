@@ -34,3 +34,26 @@ def test_subtaskbrief_from_dict_roundtrips_core_fields():
     assert b.id == "u1"
     assert b.contract.produces == ["parse_order"]
     assert b.context_slices[0].path == "orders.py"
+
+
+def test_signature_change_requires_new_signature():
+    bad = {**VALID, "task_type": "signature_change", "contract": {"produces": [], "consumes": []}}
+    errs = validate_brief(bad)
+    assert any("signature" in e.lower() for e in errs)
+
+
+def test_signature_change_ok_with_produces():
+    ok = {**VALID, "task_type": "signature_change", "contract": {"produces": ["f"], "consumes": []}}
+    assert validate_brief(ok) == []
+
+
+def test_refactor_requires_characterization_target_or_files():
+    bad = {**VALID, "task_type": "refactor", "files": []}
+    errs = validate_brief(bad)
+    assert any("characterization" in e.lower() for e in errs)
+
+
+def test_functional_brief_without_test_still_valid():
+    # code_gen with no verify_cmd / no test file is allowed (partial-credit semantics preserved)
+    ok = {**VALID, "task_type": "code_gen", "verify_cmd": "", "files": ["p.py"]}
+    assert validate_brief(ok) == []

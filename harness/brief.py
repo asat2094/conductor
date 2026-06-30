@@ -74,4 +74,29 @@ def validate_brief(d: dict) -> list[str]:
     if "contract" in d:
         if not isinstance(d["contract"], dict) or "produces" not in d["contract"] or "consumes" not in d["contract"]:
             errors.append("contract must be an object with 'produces' and 'consumes'")
+    errors.extend(_validate_by_task_type(d))
     return errors
+
+
+# Per-task-type discriminated guards (ADR-0031, REQ-D10): catch malformed-for-type briefs at
+# decompose time instead of mid-dispatch. Stdlib only — no pydantic dependency.
+_FUNCTIONAL_TYPES = {"code_edit", "code_gen", "test_write"}
+_NONFUNCTIONAL_TYPES = {"refactor", "perf"}
+
+
+def _validate_by_task_type(d: dict) -> list[str]:
+    errs: list[str] = []
+    tt = d.get("task_type")
+    contract = d.get("contract") or {}
+    if tt == "signature_change":
+        # must declare the new signature it changes to (in contract.produces or an explicit field)
+        if not contract.get("produces") and not d.get("new_signature"):
+            errs.append("signature_change brief must declare the new signature (contract.produces or new_signature)")
+    if tt in _NONFUNCTIONAL_TYPES:
+        # refactor/perf preserve behavior -> need a characterization target to gate against
+        if not d.get("characterization_target") and not d.get("files"):
+            errs.append(f"{tt} brief must declare a characterization_target (or files) to gate behavior preservation")
+    # NOTE: functional units (code_edit/code_gen) are NOT required to ship a test here — the
+    # evaluator's "no test = partial credit, not the maker's fault" semantics is preserved
+    # (ADR-0031 keeps the discriminated guards to genuinely malformed-for-type briefs).
+    return errs
