@@ -35,6 +35,7 @@ class SubTask:
     produces: list[str] = field(default_factory=list)
     consumes: list[str] = field(default_factory=list)
     logical_deps: list[str] = field(default_factory=list)
+    context_slices: list = field(default_factory=list)  # [{path,start_line,end_line}] surrounding code (REQ-RM3)
 
 
 @dataclass

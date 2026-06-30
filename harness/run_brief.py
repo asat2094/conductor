@@ -22,6 +22,7 @@ def brief_to_subtask(brief: dict[str, Any], workdir: str = ".") -> SubTask:
         produces=list(brief["contract"].get("produces", [])),
         consumes=list(brief["contract"].get("consumes", [])),
         logical_deps=list(brief.get("logical_deps", [])),
+        context_slices=list(brief.get("context_slices", [])),
     )
 
 

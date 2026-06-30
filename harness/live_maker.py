@@ -163,8 +163,13 @@ class LiveMaker:
         # 1. Resolve model spec
         spec = resolve_model(self.role, high_stakes=self.high_stakes, policy=self.policy)
 
-        # 2. Build prompt
+        # 2. Build prompt (+ inject surrounding code so the maker matches local style/idiom, REQ-RM3)
         prompt = build_prompt(subtask, feedback)
+        slices = _read_context_slices_impl(self.workdir, subtask)
+        if slices:
+            prompt += (
+                "\n\nEXISTING CODE — match its style, naming, and conventions:\n" + slices
+            )
 
         # 3. Call model
         raw_text = self._model_caller(spec, prompt)
@@ -244,3 +249,22 @@ def make_live_maker(**kw: Any) -> Callable[[Any, str, Optional[str]], UnitArtifa
         return lm.make(subtask, feedback)
 
     return maker
+
+
+def _read_context_slices_impl(workdir, subtask):
+    """Read the unit's declared context_slices from disk into a 'match this style' block (REQ-RM3).
+    Uses harness.retrieve.slice_file. Best-effort: a missing file contributes nothing."""
+    import os
+    from harness.retrieve import slice_file
+    out = []
+    for sl in getattr(subtask, "context_slices", []) or []:
+        path = os.path.join(workdir, sl["path"])
+        if not os.path.exists(path):
+            continue
+        try:
+            text = open(path).read()
+        except Exception:
+            continue
+        sliced = slice_file(text, [(sl["start_line"], sl["end_line"])])
+        out.append(f"--- {sl['path']} ---\n{sliced}")
+    return "\n".join(out)
