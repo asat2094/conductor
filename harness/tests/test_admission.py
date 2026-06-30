@@ -34,3 +34,33 @@ def test_cost_ceiling_allows_then_blocks():
     assert c.spend(20) is False    # would exceed -> blocked, not recorded
     assert c.spent == 90
     assert c.remaining == 10
+
+
+def test_cost_ceiling_audit_mode_never_blocks_but_flags():
+    c = CostCeiling(limit=100, mode="audit")
+    assert c.spend(80) is True
+    assert c.spend(50) is True          # audit never blocks
+    assert c.spent == 130
+    assert c.breached is True
+    assert c.warnings                    # a breach warning recorded
+
+
+def test_cost_ceiling_enforce_still_blocks():
+    c = CostCeiling(limit=100, mode="enforce")
+    assert c.spend(80) is True
+    assert c.spend(50) is False          # enforce blocks the overspend
+    assert c.spent == 80
+
+
+def test_cost_ceiling_rollup_folds_child_spend():
+    c = CostCeiling(limit=100, mode="audit")
+    c.spend(40)
+    c.rollup(30)                          # sub-build spend rolls into parent
+    assert c.spent == 70
+
+
+def test_warn_unpriced_is_one_time():
+    c = CostCeiling(limit=100)
+    c.warn_unpriced("mystery-model")
+    c.warn_unpriced("mystery-model")
+    assert sum("mystery-model" in w for w in c.warnings) == 1

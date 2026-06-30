@@ -72,33 +72,43 @@ def is_retryable(error_msg: str) -> bool:
 
 
 class CostCeiling:
-    """Per-run cost ceiling: blocks spend if it would exceed limit."""
+    """Per-run cost ceiling (ADR-0014/0034). Two modes:
+    - 'enforce' (default): blocks spend that would exceed the limit (does not record it).
+    - 'audit': never blocks — records all spend, sets `breached` + a warning once the limit is
+      crossed (safe audit-before-enforce rollout while the cost model is uncalibrated, design §7).
+    `rollup(child_spent)` folds a sub-build's spend into this parent ceiling."""
 
-    def __init__(self, limit: int):
-        """Initialize cost ceiling.
-
-        Args:
-            limit: Maximum cumulative spend allowed.
-        """
+    def __init__(self, limit: int, mode: str = "enforce"):
         self.limit = limit
+        self.mode = mode
         self._spent = 0
+        self.breached = False
+        self.warnings: list = []
 
     def spend(self, amount: int) -> bool:
-        """Attempt to spend cost.
-
-        If cumulative spend would exceed limit, returns False without recording.
-        Otherwise records the spend and returns True.
-
-        Args:
-            amount: Cost to spend.
-
-        Returns:
-            True if spend allowed and recorded, False if would exceed (not recorded).
-        """
-        if self._spent + amount > self.limit:
-            return False
+        """enforce: returns False (and does not record) if it would exceed. audit: always records,
+        returns True, sets breached + a one-time warning once the limit is crossed."""
+        would = self._spent + amount
+        if would > self.limit:
+            if self.mode == "audit":
+                self._spent = would
+                if not self.breached:
+                    self.breached = True
+                    self.warnings.append(f"budget breached (audit): {self._spent} > {self.limit}")
+                return True
+            return False  # enforce: block, do not record
         self._spent += amount
         return True
+
+    def rollup(self, child_spent: int) -> None:
+        """Roll a sub-build's spend up into this (parent) ceiling (ADR-0034)."""
+        self.spend(child_spent)
+
+    def warn_unpriced(self, model: str) -> None:
+        """One-time warning for a model with no price entry (don't silently count it free)."""
+        msg = f"unpriced model '{model}' — counted as 0"
+        if msg not in self.warnings:
+            self.warnings.append(msg)
 
     @property
     def spent(self) -> int:
