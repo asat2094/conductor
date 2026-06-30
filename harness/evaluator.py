@@ -1,4 +1,3 @@
-import ast
 import subprocess
 from pathlib import Path
 
@@ -6,13 +5,16 @@ from harness.models import AgentType, EvalResult, SubTask
 
 
 def check_syntax(files: list[str]) -> int:
+    """Syntax check via the per-file LanguageAdapter (ADR-0035) — no language branching here.
+    A `.py` file resolves to the Python adapter (ast.parse, identical to before); other languages
+    resolve to their adapter; unknown -> GenericAdapter (permissive). Missing files are skipped."""
+    from harness.lang.base import adapter_for_path
     for f in files:
         path = Path(f)
-        if path.suffix == ".py" and path.exists():
-            try:
-                ast.parse(path.read_text())
-            except SyntaxError:
-                return 0
+        if not path.exists():
+            continue
+        if not adapter_for_path(f).check_syntax(f):
+            return 0
     return 25
 
 

@@ -2,3 +2,4 @@
 the base system never branches on language — it resolves an adapter and calls it."""
 
 from harness.lang import python_adapter  # noqa: F401 — registers PythonAdapter
+from harness.lang import javascript_adapter  # noqa: F401 — registers JavaScriptAdapter
