@@ -36,6 +36,15 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0021](./0021-pluggable-context-optimizer.md) | Pluggable context-optimizer facade (baked-in defaults, opt-in backends) | Proposed |
 | [0022](./0022-codegraph-decomposition-verifier.md) | Codegraph-backed decomposition verifier (advisory, degrade-clean) | Proposed |
 | [0023](./0023-development-tracker-progress-board.md) | Development tracker / progress board (event-sourced, harness-derived, pluggable sinks) | Proposed |
+| [0028](./0028-checkpoint-resume-replay.md) | Checkpoint / resume / replay over the event log | Proposed |
+| [0029](./0029-wave-failure-mode-taxonomy.md) | Wave failure-mode taxonomy + concurrency cap | Proposed |
+| [0030](./0030-git-log-red-gate.md) | git-log RED-before-impl gate (commit-order, zero model trust) | Proposed |
+| [0031](./0031-discriminated-brief-schema-guards.md) | Discriminated per-task-type brief/unit schema guards | Proposed |
+| [0032](./0032-spec-completeness-probes.md) | Spec-completeness probes (Edge/Prohibition) — advisory, gate-feeding | Proposed |
+| [0033](./0033-ccr-reversible-retrieve.md) | CCR reversible-retrieve as an optimizer capability | Proposed |
+| [0034](./0034-budget-audit-enforce-rollup.md) | Budget audit｜enforce modes + sub-build spend rollup | Proposed |
+
+> **Borrow provenance (2026-06-30):** ADR-0028/0029/0031/0034 ← microsoft/conductor (patterns, MIT); 0030/0032 ← gsd-core; 0033 ← headroom. All re-implemented in-stack, vendor-neutral. **Explicitly NOT borrowed** (hampers core): LLM-judge `validator`/`dialog` gating (Law-1 violation), static per-agent model choice (router is superior), ensemble/multi-round debate (net-negative, ADR-0004 amendment), continuous autonomous loop, gsd Nyquist coverage-finder (declined — most model-trust-adjacent). **Deferred:** real-time web dashboard, capability-registry plugin contract, CacheAligner.
 | [0024](./0024-roles-are-model-assignments-context-isolation-invariant.md) | Roles are model-assignments; bounded-context isolation (not price) is the invariant | Proposed (foundational) |
 | [0025](./0025-property-based-metamorphic-gate.md) | Property-based + metamorphic testing as a first-class checker tier | Proposed |
 | [0026](./0026-held-out-acceptance-oracle.md) | Held-out acceptance oracle + anti-reward-hacking scope guard + dependency-existence check | Proposed |

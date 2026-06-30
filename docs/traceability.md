@@ -84,3 +84,17 @@ Sources: [requirements.md](./specs/conductor/requirements.md) · [design.md](./s
 **Phase-2 / deferred (no v1 REQ):**
 - ADR-0020 (MCP integration surface) — deferred; intentionally has no v1 requirement.
 - ADR-0018 full mid-flight heartbeat corroboration — deferred to phase-2 ACP; v1 only REQ-OBS1 stall.
+
+## Borrowed-pattern requirements (ADR-0028–0034, design-only pending build)
+
+| REQ | Requirement (short) | Design component | ADR | Status |
+|---|---|---|---|---|
+| REQ-OBS8 | checkpoint state on failure/interrupt/budget/interval | checkpoint over tracker_store | 0028 | proposed |
+| REQ-OBS9 | resume partial DAG + replay past run from event log | run_dag resume + replay | 0028 | proposed |
+| REQ-I5 | wave failure-mode (fail_fast｜continue｜all_or_nothing) | run_dag/merge_queue | 0029 | proposed |
+| NFR-PERF-3 | max_concurrent per wave | dispatcher | 0029 | proposed |
+| REQ-T14 | git-log RED-before-impl (commit-order) gate | strict_gates + git inspect | 0030 | proposed |
+| REQ-D10 | discriminated per-task-type brief guards | brief.validate + lint_plan | 0031 | proposed |
+| REQ-D11 | spec-completeness probes (advisory, gate-feeding) | decompose pre-pass | 0032 | proposed |
+| REQ-E4 | CCR reversible retrieve (optimizer capability) | optimizer backend | 0033 | proposed |
+| REQ-A5 | budget audit｜enforce + sub-build rollup | admission | 0034 | proposed |
