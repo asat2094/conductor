@@ -139,12 +139,17 @@ class PythonAdapter:
         return f"ruff check {' '.join(files)}"
 
     def format_check_cmd(self, files: list) -> Optional[str]:
-        """
-        Return the black format-check command for the given files.
-        """
+        """Return the black format-check command for the given files."""
         if not files:
             return None
         return f"black --check {' '.join(files)}"
+
+    def format_fix_cmd(self, files: list) -> Optional[str]:
+        """Return the black auto-format (fix) command — formatting is mechanically reversible and not
+        a behavior change (still gated by tests), so we may fix before the style check (ADR-0036)."""
+        if not files:
+            return None
+        return f"black {' '.join(files)}"
 
     def verify_dependency(self, name: str) -> str:
         """

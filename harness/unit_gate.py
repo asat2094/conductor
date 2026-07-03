@@ -25,6 +25,11 @@ class GateSpec:
     properties: list[Callable[[Any], bool]] = field(default_factory=list)
     examples: list[Any] = field(default_factory=list)
     high_stakes: bool = False
+    # optional repo-native style gate (ADR-0036): a language adapter + workdir; when set, the unit's
+    # changed files are run through the repo's own lint/format as a mechanical gate. None -> skipped.
+    style_adapter: Any = None
+    workdir: str = "."
+    style_runner: Optional[Callable] = None
 
 
 @dataclass
@@ -51,5 +56,22 @@ def evaluate_unit(artifact: UnitArtifact, spec: GateSpec) -> GateOutcome:
     results.append(("acceptance", accepted))
     if not accepted:
         return GateOutcome(False, "acceptance failed (in-loop green and/or held-out oracle)", results)
+
+    # repo-native style gate (ADR-0036): mechanical — runs the repo's own lint/format. Degrade-clean
+    # when no adapter configured or no tooling detected (status 'no-style-tooling' -> pass).
+    if spec.style_adapter is not None:
+        from harness.style_gate import style_gate, _default_runner
+        # auto-format escape hatch (ADR-0036): formatting is mechanically reversible + not a behavior
+        # change (tests still gate), so fix formatting before checking — avoids escalating a
+        # functionally-correct unit purely on whitespace.
+        fix = getattr(spec.style_adapter, "format_fix_cmd", lambda f: None)(artifact.changed_files)
+        if fix:
+            (spec.style_runner or _default_runner)(fix, spec.workdir)
+        passed, evidence, status = style_gate(
+            spec.style_adapter, artifact.changed_files, spec.workdir, runner=spec.style_runner
+        )
+        results.append(("style", passed))
+        if not passed:
+            return GateOutcome(False, f"style: {evidence}", results)
 
     return GateOutcome(True, "", results)

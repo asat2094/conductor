@@ -47,18 +47,27 @@ def build_live(
     progress: bool = True,
     progress_path: Optional[str] = None,
     db_path: str = ":memory:",
+    style: bool = False,
+    merge_queue: Any = None,
+    failure_mode: str = "continue_on_error",
+    resume_from: Optional[dict] = None,
     **maker_kw: Any,
 ):
-    """One-call live build: decompose -> verify -> per-wave dispatch through REAL makers, with LIVE
-    progress tracking (ADR-0023). Returns (DagRunResult, TrackerStore).
+    """One-call live build: onboard repo -> decompose -> verify -> per-wave dispatch through REAL
+    makers, with LIVE progress tracking (ADR-0023). Returns (DagRunResult, TrackerStore).
 
-    progress=True streams a program-manager view as each unit changes state (DISPATCHED -> HEALING ->
-    ACCEPTED/FAILED, with maker + attempt). progress_path writes the same events as JSONL for an
-    external PM/kanban tool to tail (the external-dependency path). db_path persists the event log.
-    The board is harness-derived (NFR-TRACK-1) — a sink reports, it never changes a verdict."""
+    Onboarding (ADR-0037): detects the repo's language and resolves its LanguageAdapter (ADR-0035),
+    so gates/style use the right per-language block. `style=True` enables the repo-native style gate
+    (ADR-0036) — the repo's own lint/format as a mechanical gate (default off to keep runs clean when
+    tooling isn't installed). `merge_queue`/`failure_mode`/`resume_from` thread the ADR-0028/0029
+    integration. progress streams a live PM view; progress_path feeds an external PM tool (JSONL).
+    Harness-derived (NFR-TRACK-1) — sinks report, never change a verdict."""
     from harness.run_dag import run_dag
     from harness.tracker_store import TrackerStore
     from harness.progress import live_sink, jsonl_sink
+    from harness.repo_profile import profile_repo
+    from harness.lang.base import resolve as resolve_adapter
+    from harness.conductor import default_gate_spec_for
 
     store = TrackerStore(db_path)
     if progress:
@@ -66,8 +75,21 @@ def build_live(
     if progress_path:
         store.add_sink(jsonl_sink(progress_path))
 
-    proc = make_live_processor(policy=policy, max_attempts=max_attempts, **maker_kw)
-    result = run_dag(briefs, workdir=workdir, process_unit=proc, tracker=store, edges=edges)
+    # Onboard: detect language -> adapter (ADR-0037/0035). Used for the style gate (+ future per-lang gates).
+    profile = profile_repo(workdir)
+    adapter = resolve_adapter(profile.language)
+
+    def gate_spec_for(subtask):
+        spec = default_gate_spec_for(subtask)
+        spec.workdir = workdir
+        if style:
+            spec.style_adapter = adapter   # ADR-0036 repo-native style gate
+        return spec
+
+    proc = make_live_processor(policy=policy, gate_spec_for=gate_spec_for,
+                               max_attempts=max_attempts, **maker_kw)
+    result = run_dag(briefs, workdir=workdir, process_unit=proc, tracker=store, edges=edges,
+                     merge_queue=merge_queue, failure_mode=failure_mode, resume_from=resume_from)
     return result, store
 
 

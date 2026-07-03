@@ -29,7 +29,19 @@ class JavaScriptAdapter:
         """
         if syntax_runner is not None:
             return syntax_runner(path)
-        return True  # Permissive default; real impl would check AST
+        # Real check via `node --check` when node is installed; degrade-clean to permissive True
+        # if node is absent or errors on invocation (do not block on missing tooling, ADR-0035).
+        import shutil
+        import subprocess
+        if not path.endswith((".js", ".jsx", ".mjs", ".cjs")):
+            return True  # node --check only handles JS (not TS/JSX transpiled syntax)
+        if shutil.which("node") is None:
+            return True
+        try:
+            r = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=30)
+            return r.returncode == 0
+        except Exception:
+            return True
 
     def is_test_file(self, path: str) -> bool:
         """True if `path` follows JavaScript test convention (.test.js, .spec.ts, etc.)."""

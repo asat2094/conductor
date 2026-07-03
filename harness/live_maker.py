@@ -209,26 +209,24 @@ class LiveMaker:
     def _run_in_loop_test(self, subtask: Any) -> bool:
         """Determine the in-loop test command and run it.
 
-        Priority:
+        Priority (language-agnostic, ADR-0035):
           1. subtask.verify_cmd (if present and truthy)
-          2. pytest on any file in subtask.files whose basename starts with "test_"
-          3. No test file found -> return True (partial credit, not maker's fault)
+          2. the per-file LanguageAdapter's discover_test_cmd (pytest / npm test / go test / ...)
+          3. No test command found -> return True (partial credit, not maker's fault)
         """
         verify_cmd: Optional[str] = getattr(subtask, "verify_cmd", None)
-
         if verify_cmd:
             rc, _ = self._test_runner(verify_cmd, self.workdir)
             return rc == 0
 
-        # Detect test files from subtask.files
-        test_files = [
-            f for f in getattr(subtask, "files", [])
-            if os.path.basename(f).startswith("test_")
-        ]
-        if not test_files:
+        # Resolve the adapter from the unit's files and ask it how to run the tests — no language
+        # branching here; a Python unit gets pytest, a JS unit gets npm test, etc.
+        files = list(getattr(subtask, "files", []))
+        from harness.lang.base import adapter_for_path
+        adapter = adapter_for_path(files[0]) if files else adapter_for_path("")
+        cmd = adapter.discover_test_cmd(files, self.workdir)
+        if not cmd:
             return True  # no test = partial credit, runner NOT called
-
-        cmd = "python3 -m pytest " + " ".join(test_files)
         rc, _ = self._test_runner(cmd, self.workdir)
         return rc == 0
 
