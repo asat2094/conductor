@@ -1,6 +1,6 @@
 # ADR-0034: Budget audit|enforce modes + sub-build spend rollup
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-A5
 - **Borrowed from:** microsoft/conductor (`budget_usd` + `budget_mode: audit|enforce`, parent rollup).

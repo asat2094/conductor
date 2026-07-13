@@ -1,6 +1,6 @@
 # ADR-0004: Bound the seed-input ceiling; accuracy/correctness outrank cost in the blind-spot regime (Law 3)
 
-- **Status:** Proposed
+- **Status:** Accepted — **amended by [ADR-0040](./0040-ensemble-best-of-n-maker.md)**: ensemble moves from rejected to adaptable in ONE bounded form — best-of-N makers selected by the mechanical gate (never a vote/debate on correctness).
 - **Date:** 2026-06-09
 - **Requirements:** REQ-C4, REQ-OBS4, REQ-T6
 

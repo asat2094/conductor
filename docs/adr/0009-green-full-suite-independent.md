@@ -1,6 +1,6 @@
 # ADR-0009: GREEN re-runs the unit test + full suite independently
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-T3, REQ-T8
 

@@ -1,6 +1,6 @@
 # ADR-0008: RED adequacy via assertion-cause RED + post-GREEN mutation, not test presence
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-T1, REQ-T4, REQ-T8
 

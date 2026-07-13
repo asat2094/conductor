@@ -1,6 +1,6 @@
 # ADR-0036: Repo-native style/standards gate — the repo's own tooling is a mechanical oracle
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-STYLE1, REQ-STYLE2
 

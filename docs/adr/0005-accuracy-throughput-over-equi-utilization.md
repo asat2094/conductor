@@ -1,6 +1,6 @@
 # ADR-0005: Prioritize accuracy + throughput over maker equi-utilization
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-R1, REQ-R2 (routing objective)
 

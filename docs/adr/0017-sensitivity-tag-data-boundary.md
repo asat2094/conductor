@@ -1,6 +1,6 @@
 # ADR-0017: Per-file sensitivity tag as the data boundary to free-cloud makers
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-R4, REQ-E3, NFR-SEC-1
 

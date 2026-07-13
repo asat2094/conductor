@@ -1,6 +1,6 @@
 # ADR-0016: COST-SKIP meta-gate — route small tasks to inline Claude
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-R1
 

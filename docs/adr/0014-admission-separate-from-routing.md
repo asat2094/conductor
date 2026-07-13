@@ -1,6 +1,6 @@
 # ADR-0014: An admission layer between routing and dispatch
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-A1, REQ-A2, REQ-A3
 

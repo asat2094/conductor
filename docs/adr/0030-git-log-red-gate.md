@@ -1,6 +1,6 @@
 # ADR-0030: git-log RED-before-impl gate
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-T14
 - **Borrowed from:** gsd-core (MVP+TDD capability — commit-order inspection).

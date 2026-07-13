@@ -1,6 +1,6 @@
 # ADR-0026: Held-out acceptance oracle + anti-reward-hacking scope guard + dependency-existence check
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-16
 - **Requirements:** REQ-T12, REQ-T13, REQ-A4
 

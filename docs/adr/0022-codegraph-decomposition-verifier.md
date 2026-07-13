@@ -1,6 +1,6 @@
 # ADR-0022: Codegraph-backed decomposition verifier — advisory, degrade-clean, separate from pure decompose()
 
-- **Status:** Proposed (refines [ADR-0011](./0011-hardgate-decomposition-briefs.md): codegraph moves from a pure hint to an *active but advisory* verifier)
+- **Status:** Accepted (refines [ADR-0011](./0011-hardgate-decomposition-briefs.md): codegraph moves from a pure hint to an *active but advisory* verifier)
 - **Date:** 2026-06-11
 - **Requirements:** REQ-D6, REQ-D7, REQ-D8, NFR-VERIFY-1
 

@@ -1,6 +1,6 @@
 # ADR-0013: One git worktree per maker for parallel-dispatch isolation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-I1, REQ-I2, REQ-I4, NFR-PERF-2
 

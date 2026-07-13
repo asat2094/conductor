@@ -1,6 +1,6 @@
 # ADR-0003: Mechanical-first, model-last (Law 2)
 
-- **Status:** Proposed
+- **Status:** Accepted — **amended by [ADR-0038](./0038-inconclusive-only-judge-tiebreak.md)**: one bounded exception — an LLM-judge may break a tie only when mechanical gates are *inconclusive*, never overriding a FAIL, logged + per-DAG quota'd.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-C2, REQ-C3
 

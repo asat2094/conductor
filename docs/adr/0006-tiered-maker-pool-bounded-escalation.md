@@ -1,6 +1,6 @@
 # ADR-0006: Tiered maker pool with bounded escalation 0→1→2, never straight to main
 
-- **Status:** Proposed — **generalized by [ADR-0024](./0024-roles-are-model-assignments-context-isolation-invariant.md)**: the "tiers" are capability/cost/availability bands (local · OSS · free-cloud · paid-Claude-class) that *every* role draws from, and the invariant is bounded-context isolation, not model price. "Free vs paid" here is shorthand.
+- **Status:** Accepted — **generalized by [ADR-0024](./0024-roles-are-model-assignments-context-isolation-invariant.md)**: the "tiers" are capability/cost/availability bands (local · OSS · free-cloud · paid-Claude-class) that *every* role draws from, and the invariant is bounded-context isolation, not model price. "Free vs paid" here is shorthand. **Extended by [ADR-0039](./0039-adaptive-confidence-scored-routing.md)**: band selection is driven by a live per-(model, task-type) confidence score; escalation both lowers the failing model's score and moves up a band.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-O1, REQ-C4 (escalation target)
 

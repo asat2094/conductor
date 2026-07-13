@@ -1,6 +1,6 @@
 # ADR-0027: Bounded per-unit repair loop with mechanical stop conditions ("loops", done safely)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-16
 - **Requirements:** REQ-H1, REQ-H2, REQ-H3
 

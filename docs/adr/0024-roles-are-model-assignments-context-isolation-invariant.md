@@ -1,6 +1,6 @@
 # ADR-0024: Roles are model-assignments; the invariant is bounded-context isolation, not model price
 
-- **Status:** Proposed (foundational — refines [ADR-0001](./0001-lean-orchestrator-no-file-bodies.md) and generalizes [ADR-0006](./0006-tiered-maker-pool-bounded-escalation.md))
+- **Status:** Accepted (foundational — refines [ADR-0001](./0001-lean-orchestrator-no-file-bodies.md) and generalizes [ADR-0006](./0006-tiered-maker-pool-bounded-escalation.md))
 - **Date:** 2026-06-11
 - **Requirements:** REQ-RM1, REQ-RM2, REQ-RM3
 

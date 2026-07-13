@@ -1,6 +1,6 @@
 # ADR-0015: Deterministic routing — supersedes the 2026-05-29 binary route()
 
-- **Status:** Accepted (Supersedes the 2026-05-29 multi-provider spec's routing, rate-limit, and escalation decisions)
+- **Status:** Accepted (Supersedes the 2026-05-29 multi-provider spec's routing, rate-limit, and escalation decisions) — **extended by [ADR-0039](./0039-adaptive-confidence-scored-routing.md)**: routing stays deterministic but now consumes a live per-(model, task-type) confidence score (ROI = confidence × capability / cost).
 - **Date:** 2026-06-09
 - **Requirements:** REQ-R2, REQ-R3
 

@@ -1,6 +1,6 @@
 # ADR-0033: CCR reversible-retrieve as an optimizer capability
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-E4
 - **Borrowed from:** headroom (CCR — compress, keep original locally, retrieve on demand).

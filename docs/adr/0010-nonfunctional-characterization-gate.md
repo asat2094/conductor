@@ -1,6 +1,6 @@
 # ADR-0010: Gate non-functional tasks via property-driven characterization + contract-surface diff
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-T6, REQ-I4
 

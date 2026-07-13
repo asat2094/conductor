@@ -1,6 +1,6 @@
 # ADR-0029: Wave failure-mode taxonomy + concurrency cap
 
-- **Status:** Proposed
+- **Status:** Proposed — **PARKED (2026-07-13)**: the wave failure-mode vocabulary (`fail_fast｜continue_on_error｜all_or_nothing`) is stable, but the **merge-granularity decision** it references (DAG-atomic ff-or-discard vs partial-merge vs per-wave atomic) is deferred to a dedicated deep-dive per user and NOT yet ratified.
 - **Date:** 2026-06-30
 - **Requirements:** REQ-I5, NFR-PERF-3
 - **Borrowed from:** microsoft/conductor (`fail_fast | continue_on_error | all_or_nothing`, `max_concurrent`).

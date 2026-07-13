@@ -1,6 +1,6 @@
 # ADR-0011: Hard-gate decomposition into self-contained SubtaskBriefs
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-D1, REQ-D2, REQ-D3, REQ-D4, REQ-D5, REQ-O2, REQ-O3
 

@@ -1,6 +1,6 @@
 # ADR-0031: Discriminated brief/work-unit schema guards
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-D10
 - **Borrowed from:** microsoft/conductor (`config/schema.py` — one discriminated model, per-type forbidden-field guards).

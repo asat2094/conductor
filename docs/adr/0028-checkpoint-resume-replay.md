@@ -1,6 +1,6 @@
 # ADR-0028: Checkpoint / resume / replay over the event log
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-OBS8, REQ-OBS9
 - **Borrowed from:** microsoft/conductor (`checkpoint.py`, `web/replay.py`) — pattern only, MIT, re-implemented in our stack.

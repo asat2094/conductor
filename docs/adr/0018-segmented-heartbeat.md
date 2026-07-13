@@ -1,6 +1,6 @@
 # ADR-0018: Segmented heartbeat — wall-clock stall detection now, mid-flight corroboration deferred
 
-- **Status:** Proposed (scoped)
+- **Status:** Accepted (scoped)
 - **Date:** 2026-06-09
 - **Requirements:** REQ-OBS1
 

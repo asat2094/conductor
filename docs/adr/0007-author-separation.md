@@ -1,6 +1,6 @@
 # ADR-0007: Enforce test-author ≠ impl-author per unit
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-T2
 

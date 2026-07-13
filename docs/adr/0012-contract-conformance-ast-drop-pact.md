@@ -1,6 +1,6 @@
 # ADR-0012: Seam contract conformance via harness AST extraction, not full Pact
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-I1, REQ-I3
 

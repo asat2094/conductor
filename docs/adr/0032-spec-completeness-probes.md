@@ -1,6 +1,6 @@
 # ADR-0032: Spec-completeness probes (Edge-Probe + Prohibition-Probe) — advisory, gate-feeding
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-D11
 - **Borrowed from:** gsd-core (Edge-Probe 8-category taxonomy + Prohibition-Probe must-NOT pass).

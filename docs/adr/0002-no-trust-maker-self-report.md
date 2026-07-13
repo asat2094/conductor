@@ -1,6 +1,6 @@
 # ADR-0002: Do not trust maker self-report as gate evidence (Law 1)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-09
 - **Requirements:** REQ-C1
 

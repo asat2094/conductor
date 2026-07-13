@@ -1,6 +1,6 @@
 # ADR-0025: Property-based + metamorphic testing as a first-class checker tier
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-16
 - **Requirements:** REQ-T10, REQ-T11
 

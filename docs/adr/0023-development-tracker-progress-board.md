@@ -1,6 +1,6 @@
 # ADR-0023: Development tracker / progress board — event-sourced, harness-derived, pluggable render sinks
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-11
 - **Requirements:** REQ-OBS5, REQ-OBS6, REQ-OBS7, NFR-TRACK-1
 

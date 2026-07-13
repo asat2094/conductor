@@ -1,6 +1,6 @@
 # ADR-0035: Pluggable language adapters — language-agnostic base, swappable per-language block
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-LANG1, REQ-LANG2, REQ-LANG3
 - **Supersedes:** NFR-SCOPE-1 (Python-only v1) — replaced by per-language adapters.

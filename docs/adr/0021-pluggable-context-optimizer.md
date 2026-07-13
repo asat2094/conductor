@@ -1,6 +1,6 @@
 # ADR-0021: Pluggable context-optimizer facade — baked-in defaults, opt-in heavy backends
 
-- **Status:** Proposed (supersedes the compression-engine portion of [ADR-0019](./0019-caveman-compression-paid-boundaries.md))
+- **Status:** Accepted (supersedes the compression-engine portion of [ADR-0019](./0019-caveman-compression-paid-boundaries.md))
 - **Date:** 2026-06-10
 - **Requirements:** REQ-E1, REQ-E2, REQ-E3
 

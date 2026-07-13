@@ -1,6 +1,6 @@
 # ADR-0037: Repo onboarding / profile — detect language, tooling, and standards once
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-30
 - **Requirements:** REQ-ONB1, REQ-ONB2
 

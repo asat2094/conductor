@@ -1,6 +1,6 @@
 # ADR-0001: Lean orchestrator never loads maker-produced file bodies
 
-- **Status:** Proposed — **deepened by [ADR-0024](./0024-roles-are-model-assignments-context-isolation-invariant.md)**: the savings is **bounded-context isolation, not model price** — a paid Claude-class role in its own bounded context still saves vs inline main-thread, and this applies to every role (decomposer/verifier/maker/checker), not just makers.
+- **Status:** Accepted — **deepened by [ADR-0024](./0024-roles-are-model-assignments-context-isolation-invariant.md)**: the savings is **bounded-context isolation, not model price** — a paid Claude-class role in its own bounded context still saves vs inline main-thread, and this applies to every role (decomposer/verifier/maker/checker), not just makers.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-O1
 
