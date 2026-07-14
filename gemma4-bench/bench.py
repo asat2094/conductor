@@ -5,6 +5,7 @@ Writes results to gemma4-bench/bench_results.json
 Updates harness/capability_profiles.json with discovered thresholds.
 """
 import json
+import os
 import re
 import time
 import ast
@@ -16,11 +17,29 @@ HARNESS_DIR = BENCH_DIR.parent / "harness"
 PROFILES_PATH = HARNESS_DIR / "capability_profiles.json"
 RESULTS_PATH = BENCH_DIR / "bench_results.json"
 
-SOURCE_FILES = [
-    Path("/Users/ankitatiwari/Desktop/claude-playground/backtest-engine/backend/metrics/engine.py"),
-    Path("/Users/ankitatiwari/Desktop/claude-playground/backtest-engine/backend/costs/engine.py"),
-    Path("/Users/ankitatiwari/Desktop/claude-playground/trading-system/backend/llm/tools.py"),
+# Default source candidates: this repo's own harness files (always present),
+# overridable via CONDUCTOR_BENCH_SOURCES (os.pathsep-separated absolute paths).
+_DEFAULT_SOURCE_CANDIDATES = [
+    HARNESS_DIR / "orchestrate.py",
+    HARNESS_DIR / "evaluator.py",
+    HARNESS_DIR / "provider_call.py",
 ]
+
+
+def resolve_sources(candidates: list | None = None) -> list[str]:
+    """Return source texts for payload synthesis. Env override → candidates → synthetic fallback."""
+    env = os.environ.get("CONDUCTOR_BENCH_SOURCES")
+    if env:
+        paths = [Path(p) for p in env.split(os.pathsep) if p]
+    elif candidates is not None:
+        paths = list(candidates)
+    else:
+        paths = list(_DEFAULT_SOURCE_CANDIDATES)
+    texts = [p.read_text() for p in paths if isinstance(p, Path) and p.exists()]
+    if not texts:
+        texts = ["def placeholder(): pass\n" * 50]
+    return texts
+
 
 TOKEN_TARGETS = [1000, 4000, 8000, 16000, 32000]
 TASK_TYPES = ["code_edit", "code_gen", "test_write"]
@@ -31,9 +50,7 @@ def _build_payload(target_tokens: int) -> str:
     target_chars = target_tokens * 4
     parts = []
     total = 0
-    sources = [f.read_text() for f in SOURCE_FILES if f.exists()]
-    if not sources:
-        sources = ["def placeholder(): pass\n" * 50]
+    sources = resolve_sources()
     while total < target_chars:
         for s in sources:
             parts.append(s)
@@ -165,15 +182,28 @@ def derive_thresholds(results: dict) -> dict:
 
 
 def update_profiles(thresholds: dict) -> None:
-    profiles = json.loads(PROFILES_PATH.read_text())
+    """
+    Merge bench results into live profiles using rolling average — does NOT hard-overwrite.
+    Preserves decay_per_day, last_updated, retry_budget, and any accumulated real-session accuracy.
+    max_reliable_tokens is set to the min passing token size (hard threshold, bench-authoritative).
+    """
+    import sys
+    sys.path.insert(0, str(HARNESS_DIR.parent))
+    from harness.profiles import load_profiles, save_profiles, update_accuracy
+
+    profiles = load_profiles(PROFILES_PATH)
     gemma = profiles["gemma4"]
+
     token_limits = [v["max_reliable_tokens"] for v in thresholds.values()]
-    gemma["max_reliable_tokens"] = min(token_limits) if token_limits else 8000
+    gemma.max_reliable_tokens = min(token_limits) if token_limits else 8000
+    gemma.session_failures = 0  # reset after fresh calibration
+
     for task_type, data in thresholds.items():
-        gemma["accuracy_by_type"][task_type] = data["accuracy"]
-    gemma["session_failures"] = 0
-    PROFILES_PATH.write_text(json.dumps(profiles, indent=2))
-    print(f"\nUpdated {PROFILES_PATH}")
+        bench_score = int(data["accuracy"] * 100)
+        update_accuracy(profiles, "gemma4", task_type, bench_score)
+
+    save_profiles(profiles, PROFILES_PATH)
+    print(f"\nUpdated {PROFILES_PATH} (merged via rolling avg)")
 
 
 def main():

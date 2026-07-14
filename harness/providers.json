@@ -1,0 +1,72 @@
+{
+  "gemma4": {
+    "type": "ollama",
+    "model": "gemma4:latest",
+    "base_url": "http://localhost:11434",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "local"
+  },
+  "deepseek": {
+    "type": "openai_compat",
+    "model": "deepseek-v4-flash",
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "deepseek-v4-flash is the new name; free tier with 10M welcome tokens on new accounts"
+  },
+  "nim": {
+    "type": "openai_compat",
+    "model": "meta/llama-3.1-8b-instruct",
+    "base_url": "https://integrate.api.nvidia.com/v1",
+    "api_key_env": "NIM_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "free tier 40 RPM; coding upgrade: qwen/qwen2.5-coder-32b-instruct"
+  },
+  "gemini": {
+    "type": "openai_compat",
+    "model": "gemini-2.5-flash",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_key_env": "GEMINI_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "free tier 1500 req/day 15 RPM; lite alternative: gemini-2.5-flash-lite (30 RPM)"
+  },
+  "openrouter": {
+    "type": "openai_compat",
+    "model": "qwen/qwen3-coder:free",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "Qwen3-Coder-480B MoE, SOTA free coding model, 1M context"
+  },
+  "openrouter_poolside": {
+    "type": "openai_compat",
+    "model": "poolside/laguna-m.1:free",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "Poolside Laguna M.1 — dedicated coding agent model, free, 262k ctx"
+  },
+  "opencode_deepseek": {
+    "type": "openai_compat",
+    "model": "deepseek-v4-flash-free",
+    "base_url": "https://opencode.ai/zen/v1",
+    "api_key_env": "OPENCODE_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "DeepSeek V4 Flash free via OpenCode Zen; reasoning model needs enough token budget"
+  },
+  "opencode_mimo": {
+    "type": "openai_compat",
+    "model": "mimo-v2.5-free",
+    "base_url": "https://opencode.ai/zen/v1",
+    "api_key_env": "OPENCODE_API_KEY",
+    "cost_per_1k_tokens": 0.0,
+    "tier": "cloud_cheap",
+    "_note": "Xiaomi MiMo V2.5 free via OpenCode Zen (minimax-m2.5-free promo ended)"
+  }
+}

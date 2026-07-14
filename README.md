@@ -1,238 +1,145 @@
-# conductor
+# conductor — a distributed AI coding harness
 
-Local multi-agent harness that lets Claude delegate mechanical coding tasks to **gemma4** running on your machine via ollama — saving API tokens and context for work that actually needs a frontier model.
+Claude orchestrates; decomposes a dev task into a DAG of bounded work-units; assigns roles (maker/checker/validator) to models by capability×cost (Claude families / OSS / local gemma4), each in isolated bounded context. Accepts work only through mechanical gates (tests/AST/mutation/lint) — never a maker's self-report.
 
 ```
 Claude (orchestrator)
   ├─ route → gemma4 (local, free)   code edits · code gen · test writing
+  ├─ route → OpenCode (free tier)   when local budget exhausted
   └─ route → Claude agent           research · cross-file refactors · complex tasks
 ```
 
-## How it works
+## Core principles
 
-1. **Router** classifies a subtask and picks the right agent based on task type, token count, and gemma4's live accuracy
-2. **Delegate** embeds file content in a prompt, calls ollama REST API directly, extracts the code block, writes it back to disk
-3. **Evaluator** scores the output (syntax, tests, scope, semantic) out of 100
-4. **Healer** fires on score < 70 — presents 3 recovery strategies
-5. **Session stats** track every delegation in SQLite, showing tokens routed locally vs Claude API
+- **Mechanical-first correctness** (Law 1): no model judges its own work. Every output passes syntax check (AST parse), test run (if tests exist), scope validation (changed files match request), and semantic overlap check (description vs output).
+- **Bounded-context isolation is the savings** — not model price. The orchestrator sees only brief summaries + lean verdicts; makers see isolated file bodies and test results, not the full codebase. This keeps context lean regardless of repo size.
+- **TDD as contract**: a true RED→GREEN→mutation cycle replaces self-assertion. Test author ≠ impl author (ADR-0012); test runs green before the impl author sees them.
+- **Author separation** (REQ-T2): test writer and implementation writer are different agents, verified independently against shared ground-truth tests. Prevents collusion.
+- **Pluggable language adapters** (Python, JavaScript, generic text). Each speaks its native test runner and linter.
+- **Repo-native style gate**: adapts to the target repo's own lint/format tools (Ruff, Prettier, ESLint, etc.). No harness-imposed style.
+- **Cost-skip ROI gate** (ADR-0016): if estimated tokens < 800 or projected delegation cost ≥ inline-Claude cost, the unit skips the pipeline and routes to `CLAUDE_INLINE`.
+- **Bounded repair loop** (ADR-0013): on evaluator score < 70, the healer auto-tries strategy A (shrink scope) then B (re-prompt with failure detail). Only surfaces strategy C (escalate) if both fail. Limits waste from trivial mis-parses.
 
-## Prerequisites
+## Quickstart
+
+```python
+from harness.live_pipeline import build_live, build_report
+
+brief = {
+    "id": "add",
+    "goal": "Create calc.py with add(a, b) returning a + b.",
+    "task_type": "code_gen",
+    "files": ["calc.py", "test_calc.py"],
+    "writes_files": ["calc.py"],
+    "context_slices": [],
+    "contract": {"produces": ["add"], "consumes": []},
+    "verify_cmd": "python3 -m pytest test_calc.py -q",
+    "exit_criteria": "tests pass",
+    "sensitivity": "low",
+    "estimated_tokens": 5000,
+}
+
+result, tracker = build_live([brief], workdir="/path/to/git/repo")
+print(build_report(result, tracker))
+```
+
+The harness:
+1. **Routes** the brief through cost-skip, router, and capability gates.
+2. **Decomposes** into RED (test author) and GREEN (impl author) waves if the router assigns it to a maker pool.
+3. **Dispatches** each wave in parallel via the assigned maker(s) (local gemma4, cloud cheap OSS, or Claude API).
+4. **Evaluates** output against the composed unit gate (syntax + tests + scope + semantic).
+5. **Heals** on score < 70 (auto-retry strategies A→B before surfacing C).
+6. **Tracks** every unit in SQLite with timestamps, model, tokens, cost, and outcome.
+
+## Requirements
 
 | Tool | Purpose |
 |---|---|
-| [ollama](https://ollama.com) | Runs gemma4 locally |
-| [opencode](https://opencode.ai) | Claude-side AI CLI (optional for smoke test) |
-| Python 3.10+ | Harness runtime |
-| pytest | Test suite |
+| Python 3.11+ | Harness runtime |
+| git | Version control (already present) |
+| ollama | Optional: runs gemma4 locally (or use free cloud tiers) |
+| pytest | Test suite runner (optional; harness auto-detects test files) |
 
-gemma4 requires ~10 GB disk and ≥16 GB RAM for comfortable use.
+**Network optional.** The harness works entirely local (gemma4 via ollama) or routes to free cloud tiers (DeepSeek, NIM, Gemini, OpenRouter, OpenCode Zen). Bring your own API keys for paid providers.
+
+**gemma4 on ollama** requires ~10 GB disk and ≥16 GB RAM for comfortable use (slower on less RAM).
+
+## Architecture
+
+```
+brief (JSON)
+  ↓
+[cost-skip gate] — if < 800 tokens or projected cost ≥ inline, route to CLAUDE_INLINE
+  ↓
+[router] — decompose → RED wave (test author) + GREEN wave (impl author)
+  ↓
+[parallel maker dispatch] — each wave runs independently in isolated bounded context
+  ↓
+[composed unit gate] — syntax + tests + scope + semantic checks (mechanical, no model judgment)
+  ↓
+[healer] — if score < 70, auto-retry A (shrink scope) → B (re-prompt) → surface C (escalate)
+  ↓
+[tracker] — record unit outcome in SQLite (model, tokens, cost, verdict)
+  ↓
+result + stats
+```
+
+Decomposition (ADR-0011), verification (ADR-0012), per-wave cost-skip (ADR-0016), dispatch (ADR-0024), healing (ADR-0013), tracking (ADR-0021), and progress reporting (ADR-0023) each have their own ADR. See `docs/adr/` for the full design (39 ADRs, covering deterministic routing, author separation, cost awareness, and bounded repair).
+
+## Tests
+
+```bash
+python3 -m pytest -q
+```
+
+434 tests passing. Covers router, evaluator, healer, cost model, capability profiles, parallel dispatch, and the full live pipeline end-to-end.
+
+## Status
+
+**Research-validated + live-proven prototype.** The cost model uses placeholder prices (all providers at `0.0`); the cost-skip gate and budget ceiling (ADR-0014/0034) need real per-1k-token prices to gate meaningfully. Running in `audit` mode (ADR-0034) is safe — it tracks spend and warns but never blocks.
+
+**References:**
+- `docs/adr/` — 39 architecture decision records covering the full design philosophy.
+- `docs/traceability.md` — traceability matrix linking requirements to ADRs and code.
+- `harness/live_pipeline.py` — the entrypoint (composition of router → makers → evaluator → healer → tracker).
 
 ## Setup
 
 ```bash
 git clone https://github.com/asat2094/conductor
-cd conductor
+cd conductor-develop
 bash setup.sh
 ```
 
-`setup.sh` is idempotent — safe to re-run after moving the repo or upgrading.
+`setup.sh` is idempotent. It checks system specs, verifies ollama + gemma4, installs dependencies, and runs the full test suite.
 
-What it does:
-- Evaluates system specs (RAM, CPU, GPU, disk) and recommends model tier
-- Checks ollama is running with gemma4 pulled
-- Installs `@ai-sdk/openai-compatible` for opencode
-- Writes `~/.claude/CLAUDE.md` so every Claude Code session auto-knows about the harness
-- Runs the full 30-test suite
-- Verifies capability profiles are calibrated
+## Configuration
 
-After setup, every new Claude Code session automatically loads the routing instructions — **no manual prompt required**.
+### Cost calibration (placeholder → real)
 
-## Quick start
+All providers in `harness/providers.json` are priced at `cost_per_1k_tokens: 0.0`. To enable the cost-skip gate (ADR-0016) and budget ceiling (ADR-0014/0034):
 
-### 1. Route a task
+1. **Add real prices** to `providers.json` (e.g., `"cost_per_1k_tokens": 0.002` for Claude Haiku).
+2. **Recalibrate** `harness/cost_model.MIN_DELEGATION_TOKENS` from a real run ledger. See `docs/cost-calibration.md`.
+3. **Audit first** (ADR-0034): run in budget `audit` mode to track real spend before switching to `enforce`.
 
-```bash
-cd conductor
-python3 -m harness.router '{
-  "id": "t1",
-  "description": "Add type hints to validate_order function",
-  "type": "code_edit",
-  "files": ["backend/orders.py"],
-  "estimated_tokens": 1500
-}'
-# → gemma4
-```
+### Local vs. cloud makers
 
-### 2. Delegate to gemma4
+Pass `policy={"default_maker": "gemma4"}` to `build_live()` to prefer local gemma4. The harness respects model availability: if gemma4 is down, it auto-falls back to the next cheaper option (DeepSeek, NIM, OpenRouter, then Claude API). Set via environment:
 
 ```bash
-bash harness/gemma4_delegate.sh \
-  /path/to/your/project \
-  "Add type hints to validate_order" \
-  backend/orders.py
+export CONDUCTOR_DEFAULT_MAKER="gemma4"   # prefer local
+export CONDUCTOR_DEFAULT_MAKER="deepseek" # prefer free DeepSeek Zen
 ```
 
-### 3. Evaluate output
+### Capability profiles (live-updated)
+
+`harness/capability_profiles.json` tracks per-model accuracy by task type (code_edit, code_gen, test_write). Profiles are updated in-session as units are evaluated and decay toward neutral between sessions (ADR-0029). To recalibrate from scratch:
 
 ```bash
-python3 -m harness.evaluator '{
-  "subtask": {
-    "id": "t1",
-    "description": "Add type hints to validate_order function",
-    "type": "code_edit",
-    "files": ["backend/orders.py"],
-    "estimated_tokens": 1500
-  },
-  "agent": "gemma4",
-  "changed_files": ["/abs/path/to/backend/orders.py"],
-  "output": "Written successfully"
-}'
-# → {"score": 78, "details": "syntax=25/25 tests=20/35 scope=20/20 semantic=13/20", ...}
+python3 gemma4-bench/bench.py  # ~15-30 min, runs 30 trials across token sizes
 ```
 
-Score ≥ 70: done. Score < 70: healer shows recovery options.
+---
 
-### 4. Session stats
-
-```bash
-bash harness/stats.sh
-```
-
-```
-══════════════════════════════════════════════
-  Conductor Session Stats
-══════════════════════════════════════════════
-
-  SESSION                  DATE              TOTAL GEMMA4 TOKENS→LOCAL AVG SCORE
-  ------------------------ ----------------- ----- ------ ------------ ---------
-  session-20260524         2026-05-24 16:55      4      3        5,800    87/100
-
-  Tokens routed to gemma4 (local):  5,800
-  Tokens saved from Claude API:     5,800
-  Local offload rate:               75%
-  gemma4 avg accuracy:              87/100
-```
-
-## Routing rules
-
-| Condition | Agent |
-|---|---|
-| `type` is `research` or `cross_file_refactor` | `claude_agent` always |
-| `estimated_tokens` > 32,000 | `claude_agent` |
-| gemma4 session failures ≥ 3 | `claude_agent` |
-| gemma4 accuracy < 70% for task type | `claude_agent` |
-| otherwise | `gemma4` |
-
-## Task types
-
-| Type | Use for |
-|---|---|
-| `code_edit` | Add docstrings, type hints, rename, reformat, single-function changes |
-| `code_gen` | Generate boilerplate, stubs, helpers from a clear spec |
-| `test_write` | Write a pytest test for a known function |
-| `research` | Always Claude — needs web access or broad context |
-| `cross_file_refactor` | Always Claude — multi-file coordination |
-
-## Healer strategies
-
-When evaluator score < 70:
-
-| Strategy | Action | Cost |
-|---|---|---|
-| **A — Shrink** | Halve the file scope, retry gemma4 | Same cost, +~30s |
-| **B — Re-prompt** | Inject failure detail as constraint, retry gemma4 | Same cost, +~30s |
-| **C — Escalate** | Hand to Claude agent, mark gemma4 failure (counts against retry budget) | Higher cost, +~60s |
-
-## Evaluation scoring
-
-Output scored out of 100:
-
-| Check | Max | Method |
-|---|---|---|
-| Syntax | 25 | `ast.parse()` on changed files |
-| Tests | 35 | Run pytest if test file exists; 20 partial credit if no tests |
-| Scope | 20 | Changed files match requested files (by filename) |
-| Semantic | 20 | Word overlap between task description and output/file content |
-
-## Capability profiles
-
-Live in `harness/capability_profiles.json`. Updated by the benchmark and after each real scored run.
-
-Current benchmarked values (gemma4 via ollama REST API, 2 trials × 5 token sizes × 3 task types):
-
-```
-max_reliable_tokens: 32,000
-accuracy — code_edit:  0.90
-accuracy — code_gen:   0.90
-accuracy — test_write: 0.90
-```
-
-### Recalibrate
-
-```bash
-python3 gemma4-bench/bench.py   # ~15-30 min
-```
-
-Benchmarks 30 cells (1k / 4k / 8k / 16k / 32k tokens × code_edit / code_gen / test_write), updates profiles automatically.
-
-## Session ID
-
-Set `CONDUCTOR_SESSION_ID` for per-session stats grouping:
-
-```bash
-export CONDUCTOR_SESSION_ID="$(date +%Y%m%d-%H%M%S)"
-```
-
-Add to your shell profile or set at the start of each Claude Code session.
-
-## Project structure
-
-```
-conductor/
-├── setup.sh                        # one-shot idempotent setup
-├── CLAUDE.md                       # auto-read by Claude Code when in this repo
-├── pyproject.toml
-├── harness/
-│   ├── models.py                   # SubTask, EvalResult, CapabilityProfile dataclasses
-│   ├── router.py                   # routing logic + CLI
-│   ├── evaluator.py                # scoring + CLI
-│   ├── healer.py                   # failure recovery strategy builder
-│   ├── profiles.py                 # load/save/update capability_profiles.json
-│   ├── session_stats.py            # SQLite delegation log + report
-│   ├── gemma4_delegate.sh          # thin bash wrapper
-│   ├── gemma4_call.py              # ollama REST API caller
-│   ├── stats.sh                    # stats report CLI
-│   ├── capability_profiles.json    # live gemma4 thresholds
-│   └── tests/
-│       ├── test_models.py
-│       ├── test_profiles.py
-│       ├── test_router.py
-│       ├── test_evaluator.py
-│       ├── test_healer.py
-│       └── test_session_stats.py
-└── gemma4-bench/
-    └── bench.py                    # calibration benchmark
-```
-
-## Development
-
-```bash
-# Run tests
-/opt/homebrew/bin/pytest -q        # or: python3 -m pytest -q
-
-# Run setup (idempotent)
-bash setup.sh
-
-# Recalibrate gemma4 thresholds
-python3 gemma4-bench/bench.py
-```
-
-## Key design decisions
-
-**ollama REST API, not opencode CLI** — `opencode run` is conversational-only for local models (no file tool access). The harness calls `http://localhost:11434/api/generate` directly, embeds file content in the prompt, and parses fenced code blocks from the response.
-
-**Scope check by filename, not full path** — evaluator compares basenames so relative paths in subtask definitions match absolute paths in changed_files.
-
-**Semantic scoring reads file content for short outputs** — when output is a summary string (< 30 words), evaluator reads the actual changed file and takes the max overlap score vs the description.
-
-**Rolling accuracy update** — each evaluated run updates `accuracy_by_type` as: `current × 0.7 + (score/100) × 0.3`. Decays toward real performance without overreacting to single failures.
+**Questions?** See the ADRs (`docs/adr/`) for deep dives on routing, author separation, cost awareness, and bounded repair. The design is fully traced and decision-rationale is explicit.

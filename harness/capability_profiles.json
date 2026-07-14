@@ -2,12 +2,14 @@
   "gemma4": {
     "max_reliable_tokens": 32000,
     "accuracy_by_type": {
-      "code_edit": 0.9,
+      "code_edit": 0.811,
       "code_gen": 0.9,
       "test_write": 0.9
     },
     "session_failures": 0,
-    "retry_budget": 3
+    "retry_budget": 3,
+    "last_updated": 1780080044.126904,
+    "decay_per_day": 0.98
   },
   "claude_agent": {
     "max_reliable_tokens": 180000,
@@ -19,6 +21,91 @@
       "test_write": 0.93
     },
     "session_failures": 0,
-    "retry_budget": 10
+    "retry_budget": 10,
+    "last_updated": 1780079585.151188,
+    "decay_per_day": 0.98
+  },
+  "deepseek": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780079585.151189,
+    "decay_per_day": 0.98
+  },
+  "nim": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.706,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780079692.5969899,
+    "decay_per_day": 0.98
+  },
+  "gemini": {
+    "max_reliable_tokens": 128000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780079585.151191,
+    "decay_per_day": 0.98
+  },
+  "openrouter": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780079585.151191,
+    "decay_per_day": 0.98
+  },
+  "openrouter_poolside": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "decay_per_day": 0.98
+  },
+  "opencode_deepseek": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780080030.5780852,
+    "decay_per_day": 0.98
+  },
+  "opencode_mimo": {
+    "max_reliable_tokens": 32000,
+    "accuracy_by_type": {
+      "code_edit": 0.7,
+      "code_gen": 0.7,
+      "test_write": 0.7
+    },
+    "session_failures": 0,
+    "retry_budget": 3,
+    "last_updated": 1780080030.578086,
+    "decay_per_day": 0.98
   }
 }

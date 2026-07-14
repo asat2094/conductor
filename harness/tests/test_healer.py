@@ -1,5 +1,5 @@
 from harness.models import SubTask, TaskType, AgentType, EvalResult, CapabilityProfile
-from harness.healer import build_healer_report, apply_shrink, apply_reprompt
+from harness.healer import build_healer_report, apply_shrink, apply_reprompt, auto_heal
 
 
 def _subtask():
@@ -54,3 +54,101 @@ def test_apply_reprompt_injects_failure():
     reprompted = apply_reprompt(_subtask(), "tests failed: assertion error on line 42")
     assert "tests failed" in reprompted.description
     assert "_reprompt" in reprompted.id
+
+
+def _good_eval(subtask, agent, changed_files, output):
+    return EvalResult(
+        subtask_id=subtask.id, agent=agent, score=80,
+        syntax_score=25, test_score=35, scope_score=20, semantic_score=0,
+        details="ok",
+    )
+
+
+def _bad_eval(subtask, agent, changed_files, output):
+    return EvalResult(
+        subtask_id=subtask.id, agent=agent, score=40,
+        syntax_score=25, test_score=0, scope_score=15, semantic_score=0,
+        details="fail",
+    )
+
+
+def test_auto_heal_strategy_a_succeeds():
+    new_result, strategy = auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=lambda w, t, f, **kw: ("resp", "code"),
+        evaluate_fn=_good_eval,
+    )
+    assert strategy == "A"
+    assert new_result is not None
+    assert new_result.score >= 70
+
+
+def test_auto_heal_strategy_b_succeeds():
+    call_count = {"n": 0}
+
+    def delegate(w, t, f, **kw):
+        call_count["n"] += 1
+        return ("resp", "code")
+
+    def evaluate(subtask, agent, changed_files, output):
+        # A fails, B succeeds
+        if "_shrunk" in subtask.id:
+            return _bad_eval(subtask, agent, changed_files, output)
+        return _good_eval(subtask, agent, changed_files, output)
+
+    new_result, strategy = auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=delegate, evaluate_fn=evaluate,
+    )
+    assert strategy == "B"
+    assert new_result is not None
+
+
+def test_auto_heal_escalates_when_both_fail():
+    new_result, strategy = auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=lambda w, t, f, **kw: ("resp", "code"),
+        evaluate_fn=_bad_eval,
+    )
+    assert strategy == "C"
+    assert new_result is None
+
+
+def test_auto_heal_escalates_on_no_code():
+    new_result, strategy = auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=lambda w, t, f, **kw: ("resp", None),
+        evaluate_fn=_good_eval,
+    )
+    assert strategy == "C"
+    assert new_result is None
+
+
+def test_auto_heal_propagates_diff_mode():
+    """delegate_fn receives diff_mode=True when auto_heal is called with diff_mode=True."""
+    received_modes = []
+
+    def capturing_delegate(w, t, f, diff_mode=False):
+        received_modes.append(diff_mode)
+        return ("resp", "code")
+
+    auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=capturing_delegate, evaluate_fn=_good_eval,
+        diff_mode=True,
+    )
+    assert all(m is True for m in received_modes), f"Expected all True, got {received_modes}"
+
+
+def test_auto_heal_diff_mode_false_by_default():
+    received_modes = []
+
+    def capturing_delegate(w, t, f, diff_mode=False):
+        received_modes.append(diff_mode)
+        return ("resp", "code")
+
+    auto_heal(
+        _subtask(), _result(), _profiles(), workdir="/tmp",
+        delegate_fn=capturing_delegate, evaluate_fn=_good_eval,
+    )
+    assert all(m is False for m in received_modes)

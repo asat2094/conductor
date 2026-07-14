@@ -1,4 +1,4 @@
-from harness.models import AgentType, CapabilityProfile, EvalResult, SubTask
+from harness.models import CapabilityProfile, EvalResult, SubTask
 
 
 def build_healer_report(
@@ -6,7 +6,7 @@ def build_healer_report(
     result: EvalResult,
     profiles: dict[str, CapabilityProfile],
 ) -> str:
-    agent_name = result.agent.value
+    agent_name = result.agent if isinstance(result.agent, str) else result.agent.value
     failures = profiles.get("gemma4", CapabilityProfile(0, {})).session_failures
     budget = profiles.get("gemma4", CapabilityProfile(0, {}, retry_budget=3)).retry_budget
 
@@ -48,3 +48,54 @@ def apply_reprompt(subtask: SubTask, failure_detail: str) -> SubTask:
         dependencies=subtask.dependencies,
         assigned_agent=subtask.assigned_agent,
     )
+
+
+def auto_heal(
+    subtask: SubTask,
+    result: EvalResult,
+    profiles: dict[str, CapabilityProfile],
+    workdir: str,
+    delegate_fn=None,
+    evaluate_fn=None,
+    diff_mode: bool = False,
+) -> tuple[EvalResult | None, str]:
+    """
+    Automatically try strategy A (shrink) then B (re-prompt) before giving up.
+
+    Returns (new_result, strategy) where strategy is "A", "B", or "C".
+    "C" means both auto strategies failed — caller should escalate to claude_agent.
+
+    delegate_fn(workdir, task, files, diff_mode) → (response, code|None)
+    evaluate_fn(subtask, agent, changed_files, output) → EvalResult
+    diff_mode: passed through to delegate so healing calls honour the same mode.
+    """
+    from pathlib import Path
+    from harness.gemma4_call import run as _default_delegate
+    from harness.evaluator import evaluate as _default_evaluate
+
+    _evaluate = evaluate_fn or _default_evaluate
+
+    def _delegate(w, task, files):
+        fn = delegate_fn or _default_delegate
+        return fn(w, task, files, diff_mode=diff_mode)
+
+    # Strategy A: shrink scope
+    shrunk = apply_shrink(subtask)
+    response_a, code_a = _delegate(workdir, shrunk.description, shrunk.files)
+    if code_a is not None:
+        changed_a = [str(Path(workdir) / f) for f in shrunk.files]
+        result_a = _evaluate(shrunk, result.agent, changed_a, response_a)
+        if result_a.score >= 70:
+            return result_a, "A"
+
+    # Strategy B: re-prompt with failure detail
+    reprompted = apply_reprompt(subtask, result.details)
+    response_b, code_b = _delegate(workdir, reprompted.description, reprompted.files)
+    if code_b is not None:
+        changed_b = [str(Path(workdir) / f) for f in reprompted.files]
+        result_b = _evaluate(reprompted, result.agent, changed_b, response_b)
+        if result_b.score >= 70:
+            return result_b, "B"
+
+    # Both failed — escalate
+    return None, "C"

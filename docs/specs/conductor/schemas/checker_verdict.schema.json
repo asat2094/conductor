@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conductor/checker_verdict.schema.json",
+  "title": "CheckerVerdict",
+  "description": "Lean verdict the orchestrator consumes (REQ-O1). Never contains file bodies. Harness-derived evidence only (REQ-C1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit_id", "gate_results", "confidence", "decision", "changed_files"],
+  "properties": {
+    "unit_id": { "type": "string" },
+    "gate_results": {
+      "type": "array",
+      "description": "per-gate outcome; deterministic gates run 100% (REQ-C2)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate", "passed"],
+        "properties": {
+          "gate": { "type": "string", "enum": ["RED", "GREEN", "MUTATION", "REFACTOR", "CONTRACT", "CHARACTERIZATION", "ASSEMBLY"] },
+          "passed": { "type": "boolean" },
+          "hard_fail": { "type": "boolean", "description": "true → unconditional reject regardless of confidence (REQ-C3)" },
+          "detail": { "type": "string", "description": "terse, prose; compressible; no file bodies" }
+        }
+      }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "aggregate mechanical confidence (REQ-C3)" },
+    "decision": { "type": "string", "enum": ["accept", "escalate", "intervene"], "description": "accept ≥ threshold & no hard-fail; intervene on blind-spot signal (REQ-C4)" },
+    "changed_files": { "type": "array", "items": { "type": "string" } }
+  }
+}

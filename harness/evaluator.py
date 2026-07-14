@@ -1,4 +1,3 @@
-import ast
 import subprocess
 from pathlib import Path
 
@@ -6,13 +5,16 @@ from harness.models import AgentType, EvalResult, SubTask
 
 
 def check_syntax(files: list[str]) -> int:
+    """Syntax check via the per-file LanguageAdapter (ADR-0035) — no language branching here.
+    A `.py` file resolves to the Python adapter (ast.parse, identical to before); other languages
+    resolve to their adapter; unknown -> GenericAdapter (permissive). Missing files are skipped."""
+    from harness.lang.base import adapter_for_path
     for f in files:
         path = Path(f)
-        if path.suffix == ".py" and path.exists():
-            try:
-                ast.parse(path.read_text())
-            except SyntaxError:
-                return 0
+        if not path.exists():
+            continue
+        if not adapter_for_path(f).check_syntax(f):
+            return 0
     return 25
 
 
@@ -108,15 +110,45 @@ if __name__ == "__main__":
     import sys
 
     from harness.models import TaskType
+    from harness.profiles import load_profiles
     from harness.session_stats import update_score
 
-    data = json.loads(sys.argv[1])
+    auto_heal_flag = "--auto-heal" in sys.argv
+    argv_clean = [a for a in sys.argv[1:] if a != "--auto-heal"]
+
+    data = json.loads(argv_clean[0])
     st = data["subtask"]
     st["type"] = TaskType(st["type"])
     subtask = SubTask(**st)
     agent = AgentType(data["agent"])
-    changed = data["changed_files"]
-    output = data["output"]
+    workdir = data.get("workdir", ".")
+    output = data.get("output", "")
+
+    # changed_files optional: derive from workdir + subtask.files if not supplied
+    if "changed_files" in data:
+        changed = data["changed_files"]
+    else:
+        from pathlib import Path
+        changed = [str(Path(workdir) / f) for f in subtask.files]
+
     result = evaluate(subtask, agent, changed, output)
     update_score(subtask.id, result.score)
+
+    if auto_heal_flag and result.score < 70:
+        from harness.healer import auto_heal
+        profiles = load_profiles()
+        healed_result, strategy = auto_heal(subtask, result, profiles, workdir)
+        if healed_result is not None:
+            update_score(healed_result.subtask_id, healed_result.score)
+            out = vars(healed_result)
+            out["healer_strategy"] = strategy
+            print(json.dumps(out))
+            sys.exit(0)
+        else:
+            out = vars(result)
+            out["healer_strategy"] = "C"
+            out["healer_note"] = "Both A and B failed — escalate to claude_agent."
+            print(json.dumps(out))
+            sys.exit(2)
+
     print(json.dumps(vars(result)))
