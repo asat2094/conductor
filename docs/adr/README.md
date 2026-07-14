@@ -4,7 +4,7 @@ This directory records architecture decisions for conductor in a Nygard + MADR h
 
 ADRs are **immutable once Accepted**: an accepted ADR is never edited to change its decision. A later decision that changes course is recorded as a **new ADR** that **supersedes** the earlier one. The earlier ADR's status is updated to Superseded with a pointer forward.
 
-Status (design review, 2026-07-13): all ADRs **Accepted** except — ADR-0019 Superseded by 0021; ADR-0020 Deferred (Phase 2); **ADR-0029 PARKED** — its merge-granularity decision (DAG-atomic vs partial vs per-wave) awaits a dedicated deep-dive. Three new ADRs came out of the review: **0038** (inconclusive-only judge tiebreak, amends 0003), **0039** (adaptive confidence-scored routing, extends 0015/0006/0016), **0040** (ensemble best-of-N maker, amends 0004).
+Status (design review, 2026-07-13/14): all ADRs **Accepted** except — ADR-0019 Superseded by 0021; ADR-0020 Deferred (Phase 2). Four new ADRs came out of the review: **0038** (inconclusive-only judge tiebreak, amends 0003), **0039** (adaptive confidence-scored routing, extends 0015/0006/0016), **0040** (ensemble best-of-N maker, amends 0004), **0041** (per-wave atomic merge — closed-subgraph landing, amends 0012, resolves the parked 0029 merge-granularity question).
 
 The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Superseded by [ADR-0014](./0014-admission-separate-from-routing.md) and [ADR-0015](./0015-deterministic-routing-supersedes-binary-route.md)**.
 
@@ -37,7 +37,7 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0022](./0022-codegraph-decomposition-verifier.md) | Codegraph-backed decomposition verifier (advisory, degrade-clean) | Accepted |
 | [0023](./0023-development-tracker-progress-board.md) | Development tracker / progress board (event-sourced, harness-derived, pluggable sinks) | Accepted |
 | [0028](./0028-checkpoint-resume-replay.md) | Checkpoint / resume / replay over the event log | Accepted |
-| [0029](./0029-wave-failure-mode-taxonomy.md) | Wave failure-mode taxonomy + concurrency cap | **Proposed — PARKED** (merge-granularity deep-dive) |
+| [0029](./0029-wave-failure-mode-taxonomy.md) | Wave failure-mode taxonomy + concurrency cap | Accepted (atomicity settled in 0041) |
 | [0030](./0030-git-log-red-gate.md) | git-log RED-before-impl gate (commit-order, zero model trust) | Accepted |
 | [0031](./0031-discriminated-brief-schema-guards.md) | Discriminated per-task-type brief/unit schema guards | Accepted |
 | [0032](./0032-spec-completeness-probes.md) | Spec-completeness probes (Edge/Prohibition) — advisory, gate-feeding | Accepted |
@@ -55,3 +55,4 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0038](./0038-inconclusive-only-judge-tiebreak.md) | Inconclusive-only LLM-judge tiebreak (bounded exception to Law 2) | Accepted (amends 0003) |
 | [0039](./0039-adaptive-confidence-scored-routing.md) | Adaptive confidence-scored routing (live per-(model, task-type) feedback) | Accepted (extends 0015/0006/0016) |
 | [0040](./0040-ensemble-best-of-n-maker.md) | Ensemble as best-of-N maker (gate-selected, not vote-on-correctness) | Accepted (amends 0004) |
+| [0041](./0041-per-wave-atomic-merge.md) | Per-wave atomic merge (closed-subgraph landing) | Accepted (amends 0012, un-parks 0029) |

@@ -1,6 +1,6 @@
 # ADR-0012: Seam contract conformance via harness AST extraction, not full Pact
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended by [ADR-0041](./0041-per-wave-atomic-merge.md)**: merge-queue finalize is now **per-wave atomic** (closed-subgraph landing) by default, with whole-DAG ff-or-discard retained as opt-in `atomicity="dag"`.
 - **Date:** 2026-06-09
 - **Requirements:** REQ-I1, REQ-I3
 
