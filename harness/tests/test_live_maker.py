@@ -95,3 +95,34 @@ def test_make_drops_writes_outside_declared_writes_files(tmp_path):
     assert art.changed_files == ["calc.py"]              # only declared file written
     assert "test_calc.py" in lm.rejected_writes          # scope leak dropped
     assert not (tmp_path / "test_calc.py").exists()
+
+
+def test_optimize_context_skips_local_reader(tmp_path):
+    # gemma4 (ollama) is a free/local reader -> slices pass through UNcompressed (latency-only)
+    (tmp_path / "ctx.py").write_text("def style_reference():\n    return 'VERBATIM-MARKER'\n")
+    seen = {}
+    def model(spec, prompt):
+        seen["prompt"] = prompt
+        return "=== FILE: p.py ===\nx=1\n=== END ==="
+    sub = _subtask(files=["p.py"],
+                   context_slices=[{"path": "ctx.py", "start_line": 1, "end_line": 2}])
+    lm = LiveMaker(str(tmp_path), role="impl_author", model_caller=model,
+                   test_runner=lambda c, w: (0, ""), differ=lambda w, p: "",
+                   optimize_context=True)
+    lm.make(sub, None)
+    assert "VERBATIM-MARKER" in seen["prompt"]     # local reader -> untouched
+
+
+def test_optimize_context_ccr_keeps_original_retrievable(tmp_path):
+    from harness.ccr_store import CCRStore
+    (tmp_path / "ctx.py").write_text("def style_reference():\n    return 'VERBATIM-MARKER'\n")
+    ccr = CCRStore()
+    sub = _subtask(files=["p.py"],
+                   context_slices=[{"path": "ctx.py", "start_line": 1, "end_line": 2}])
+    lm = LiveMaker(str(tmp_path), role="impl_author",
+                   model_caller=lambda s, p: "=== FILE: p.py ===\nx=1\n=== END ===",
+                   test_runner=lambda c, w: (0, ""), differ=lambda w, p: "",
+                   optimize_context=True, ccr_store=ccr)
+    lm.make(sub, None)
+    handles = ccr.handles()
+    assert handles and "VERBATIM-MARKER" in ccr.retrieve(handles[0])   # reversible (ADR-0033)

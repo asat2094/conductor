@@ -138,6 +138,8 @@ class LiveMaker:
         differ: Optional[Callable] = None,
         test_runner: Optional[Callable] = None,
         no_test_inconclusive: bool = False,
+        optimize_context: bool = False,
+        ccr_store: Optional[Any] = None,
     ) -> None:
         self.workdir = workdir
         self.role = role
@@ -147,6 +149,11 @@ class LiveMaker:
         # so the gate routes it to the judge tiebreak instead of auto-passing. Default False keeps the
         # historical "no test = partial credit" behavior.
         self.no_test_inconclusive = no_test_inconclusive
+        # ADR-0021/0033: reader-aware context compression — context slices are compressed ONLY when
+        # the resolved maker model is a paid reader (claude_cli); local readers get raw slices.
+        # ccr_store (if given) keeps the ORIGINAL slice retrievable (reversible compression).
+        self.optimize_context = optimize_context
+        self.ccr_store = ccr_store
 
         self._model_caller = model_caller if model_caller is not None else call_model
         self._file_writer = file_writer  # None -> use default below
@@ -165,13 +172,22 @@ class LiveMaker:
 
     def make(self, subtask: Any, feedback: Optional[str]) -> UnitArtifact:
         """Core make step: model -> file writes -> diff -> test -> UnitArtifact."""
-        # 1. Resolve model spec
-        spec = resolve_model(self.role, high_stakes=self.high_stakes, policy=self.policy)
+        # 1. Resolve model spec. High-sensitivity units are high-stakes by default (ADR-0017↔0026):
+        # the role resolver bumps the tier for them even if the maker wasn't constructed high-stakes.
+        stakes = self.high_stakes or getattr(subtask, "sensitivity", "low") == "high"
+        spec = resolve_model(self.role, high_stakes=stakes, policy=self.policy)
 
         # 2. Build prompt (+ inject surrounding code so the maker matches local style/idiom, REQ-RM3)
         prompt = build_prompt(subtask, feedback)
         slices = _read_context_slices_impl(self.workdir, subtask)
         if slices:
+            # ADR-0021: compress slices only for paid readers; ADR-0033: keep originals retrievable.
+            if self.optimize_context:
+                from harness.optimizer_wiring import optimize_for_reader
+                if self.ccr_store is not None:
+                    self.ccr_store.store(slices)
+                msgs = optimize_for_reader([{"role": "user", "content": slices}], spec)
+                slices = msgs[0]["content"] if msgs else slices
             prompt += (
                 "\n\nEXISTING CODE — match its style, naming, and conventions:\n" + slices
             )

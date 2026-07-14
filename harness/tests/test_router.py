@@ -186,3 +186,20 @@ def test_cost_skip_passes_large_new_task_types_through():
     # REFACTOR/SIGNATURE_CHANGE/PERF are maker-eligible types: large ones pass through
     for tt in (TaskType.REFACTOR, TaskType.SIGNATURE_CHANGE, TaskType.PERF):
         assert cost_skip(_st(20_000, ttype=tt)) is None
+
+
+# --- ADR-0017 sensitivity boundary ---
+
+def test_rank_providers_high_sensitivity_excludes_cloud():
+    from harness.router import rank_providers
+    st = SubTask("t1", "edit secrets handler", TaskType.CODE_EDIT, ["s.py"], 100, sensitivity="high")
+    ranked = rank_providers(st, _rp_providers(), _rp_profiles())
+    # deepseek/gemini are cloud_cheap -> excluded; gemma4 (local) + trusted claude fallback only
+    assert ranked == ["gemma4", "claude_agent"]
+
+
+def test_rank_providers_low_sensitivity_unchanged():
+    from harness.router import rank_providers
+    st = SubTask("t1", "edit", TaskType.CODE_EDIT, ["s.py"], 100, sensitivity="low")
+    ranked = rank_providers(st, _rp_providers(), _rp_profiles())
+    assert "gemini" in ranked and "deepseek" in ranked

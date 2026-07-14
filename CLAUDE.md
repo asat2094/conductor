@@ -8,7 +8,27 @@ Offloads mechanical coding tasks (code edits, code gen, file creation, test writ
 
 gemma4 can **edit existing files** and **create new files** — the harness handles filesystem I/O, gemma4 only does the text transformation.
 
-## Running tasks via the harness
+## Running a distributed build (PRIMARY — the ADR-gated DAG spine)
+
+```bash
+# Decompose -> verify -> per-wave dispatch through real makers, mechanical gates only.
+# briefs.json = JSON list of SubtaskBriefs (see docs/specs/conductor/schemas/).
+python3 -m harness briefs.json --workdir <repo> --report
+# Opt-in gates/features:
+#   --style        repo-native lint/format gate (ADR-0036)
+#   --tdd-gates    git-RED commit-order gate (ADR-0030)
+#   --codegraph    codegraph verify + per-wave reverify (ADR-0022)
+#   --probes       advisory spec-completeness probes (ADR-0032)
+#   --atomicity wave|dag   per-wave vs whole-DAG merge (ADR-0041)
+#   --budget N --budget-mode audit|enforce   token ceiling (ADR-0034)
+#   --checkpoint ck.json / --resume ck.json  wave-boundary checkpoints (ADR-0028)
+# Exit: 0 = no unit failed.
+```
+
+Library form: `harness.live_pipeline.build_live(...)` (judge tiebreak, confidence store,
+best-of-N, merge queue, webhook sink are library-only knobs — see its docstring).
+
+## Running single tasks (legacy one-off path)
 
 ```bash
 # FASTEST: end-to-end pipeline — route + delegate + evaluate + auto_heal in one shot
@@ -79,7 +99,10 @@ python3 gemma4-bench/bench.py  # recalibrate capability profiles (15-30 min)
 ```
 
 Key files:
-- `harness/pipeline.py` — end-to-end route+delegate+eval+heal; `python3 -m harness.pipeline`
+- `harness/__main__.py` — `python3 -m harness` distributed-build CLI (the DAG spine)
+- `harness/live_pipeline.py` — build_live: onboard -> decompose -> waves -> gates -> merge
+- `harness/run_dag.py` / `harness/unit_gate.py` / `harness/merge_queue.py` — spine internals
+- `harness/pipeline.py` — legacy one-off route+delegate+eval+heal; `python3 -m harness.pipeline`
 - `harness/router.py` — routing logic (auto token estimation)
 - `harness/tokens.py` — estimate_tokens() from file sizes (per-extension multipliers)
 - `harness/evaluator.py` — output scoring; --auto-heal flag; derives changed_files from workdir

@@ -61,11 +61,17 @@ def rank_providers(
     if subtask.type in _ALWAYS_CLAUDE:
         return ["claude_agent"]
 
+    # ADR-0017 data boundary: high-sensitivity units NEVER go to a free-cloud maker —
+    # only local providers are admissible (claude_agent fallback is the trusted orchestrator tier).
+    sensitive = getattr(subtask, "sensitivity", "low") == "high"
+
     candidates = []
     for name, config in providers.items():
         if name == "claude_agent":
             continue
         if name in busy:
+            continue
+        if sensitive and getattr(config, "tier", "") != "local":
             continue
         profile = profiles.get(name)
         if profile is None:

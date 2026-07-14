@@ -13,6 +13,28 @@ import subprocess
 from typing import Callable, Optional
 
 
+NPM_OFFLINE = object()   # sentinel: resolver couldn't check (network error) — never treat as ok
+
+
+def _default_npm_resolver(name: str):
+    """Live npm-registry existence check. Fixed host (SSRF-safe: name is pre-validated and
+    URL-quoted; the host is never derived from input). True/False, or NPM_OFFLINE on error."""
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+    # scoped names need the / encoded: @scope/pkg -> @scope%2Fpkg
+    url = f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@')}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        return NPM_OFFLINE
+    except Exception:
+        return NPM_OFFLINE
+
+
 class JavaScriptAdapter:
     """JavaScript/TypeScript language adapter for the harness."""
 
@@ -209,39 +231,42 @@ class JavaScriptAdapter:
         files_str = " ".join(files)
         return f"prettier --check {files_str}"
 
-    def verify_dependency(self, name: str) -> str:
+    def verify_dependency(self, name: str, resolver: Optional[Callable] = None) -> str:
         """
-        Verify npm package name validity and existence.
+        Verify npm package name validity and existence (slopsquatting guard, ADR-0026/REQ-A4).
 
         Returns:
-        - "invalid": package name contains invalid characters
-        - "unverified": valid syntax but registry lookup not performed (degrade-safe default)
-        - "ok": (only when real registry lookup is enabled)
+        - "invalid": name fails npm rules (also blocks SSRF/path-injection before any network call)
+        - "ok": package exists on the npm registry
+        - "unresolvable": registry 404 — likely a hallucinated package, REJECT the install
+        - "unverified": network/registry error — do not auto-install, never silently "ok"
 
-        Real implementation would query npm registry (npmjs.org/api/v1/search?text=<name>).
-        This stub is degrade-safe: never auto-approves, allowing operators to verify manually if needed.
+        Mirrors the SSRF-hardened PyPI check (harness.deps_check): strict validation BEFORE the
+        network, fixed registry host, injectable resolver so tests need no network.
         """
-        # Validate npm package name syntax
         # Allowed: lowercase letters, digits, hyphens, and scoped names (@scope/package)
         if not isinstance(name, str) or not name:
             return "invalid"
 
-        # Allow @scope/package format
         if name.startswith("@"):
             parts = name.split("/")
             if len(parts) != 2 or not parts[1]:
                 return "invalid"
             scope, pkg_name = parts
-            # Scope and package name must contain only lowercase, digits, hyphens
             if not re.match(r"^@[a-z0-9\-]+$", scope) or not re.match(r"^[a-z0-9\-]+$", pkg_name):
                 return "invalid"
         else:
-            # Plain package name: lowercase, digits, hyphens only
             if not re.match(r"^[a-z0-9\-]+$", name):
                 return "invalid"
 
-        # Real impl would query npm registry here; for safety, return unverified
-        return "unverified"
+        resolver = resolver or _default_npm_resolver
+        try:
+            result = resolver(name)
+        except Exception:
+            return "unverified"
+        if result is NPM_OFFLINE:
+            return "unverified"
+        return "ok" if result else "unresolvable"
 
 
 def _default_runner(cmd: str, workdir: str) -> tuple:

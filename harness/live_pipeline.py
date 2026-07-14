@@ -56,6 +56,14 @@ def build_live(
     confidence: Any = None,
     judge: Optional[Callable[[Any], bool]] = None,
     judge_quota: Any = None,
+    judge_model: Optional[str] = None,
+    webhook_post: Optional[Callable[[dict], Any]] = None,
+    tdd_gates: bool = False,
+    extra_gates_for: Optional[Callable[[Any], list]] = None,
+    cost_ceiling: Any = None,
+    checkpoint_path: Optional[str] = None,
+    codegraph: bool = False,
+    probes: bool = False,
     **maker_kw: Any,
 ):
     """One-call live build: onboard repo -> decompose -> verify -> per-wave dispatch through REAL
@@ -84,26 +92,76 @@ def build_live(
         store.add_sink(live_sink())
     if progress_path:
         store.add_sink(jsonl_sink(progress_path))
+    if webhook_post is not None:                       # ADR-0023 external-PM sink
+        from harness.progress import webhook_sink
+        store.add_sink(webhook_sink(webhook_post))
 
     # Onboard: detect language -> adapter (ADR-0037/0035). Used for the style gate (+ future per-lang gates).
     profile = profile_repo(workdir)
     adapter = resolve_adapter(profile.language)
 
+    # ADR-0032 spec-completeness probes: ADVISORY — annotate briefs with edge/prohibition hints
+    # for the maker's context; never gates, never mutates the caller's list.
+    if probes:
+        from harness.spec_probes import annotate_brief
+        briefs = [annotate_brief(b) for b in briefs]
+
+    # ADR-0022/REQ-D9 codegraph: live edges for verify + per-wave re-verify. Degrade-clean —
+    # a missing codegraph CLI yields {} and the verifier reports 'unverified', never blocks.
+    reverify = None
+    if codegraph:
+        from harness.codegraph_live import make_codegraph_query
+        from harness.verify import verify_decomposition
+        _qf = make_codegraph_query()
+        _files = sorted({f for b in briefs for f in b.get("files", [])})
+        if edges is None:
+            edges = _qf(_files, workdir)
+        def reverify(by_id, accepted):
+            return verify_decomposition(list(by_id.values()), edges=_qf(_files, workdir))
+
+    # ADR-0038 judge wiring: real author identities (author-separation must compare actual
+    # models, not placeholders) + ONE shared per-DAG quota (~10% of units, min 1).
+    if judge is not None:
+        import math
+        from harness.judge import JudgeQuota
+        from harness.role_policy import resolve_model, model_id
+        from harness.tracker import UnitState
+        impl_id = model_id(resolve_model("impl_author", policy=policy,
+                                         high_stakes=maker_kw.get("high_stakes", False)))
+        judge_id = judge_model or model_id(resolve_model("judge", policy=policy))
+        if judge_quota is None:
+            judge_quota = JudgeQuota(limit=max(1, math.ceil(0.10 * len(briefs))))
+
     def gate_spec_for(subtask):
         spec = default_gate_spec_for(subtask)
         spec.workdir = workdir
+        # ADR-0017 ↔ ADR-0026: high-sensitivity units are high-stakes by default —
+        # the held-out oracle becomes mandatory for them.
+        if getattr(subtask, "sensitivity", "low") == "high":
+            spec.high_stakes = True
         if style:
             spec.style_adapter = adapter   # ADR-0036 repo-native style gate
+        if tdd_gates:                      # ADR-0030 git-RED commit-order gate (opt-in)
+            from harness.gate_stages import git_red_stage
+            spec.extra_gates.append(("git_red", git_red_stage(workdir)))
+        if extra_gates_for is not None:    # ADR-0008/0010 mutation / characterization, per-unit
+            spec.extra_gates.extend(extra_gates_for(subtask))
         if judge is not None:              # ADR-0038 inconclusive-only judge tiebreak (opt-in)
             spec.judge = judge
             spec.judge_quota = judge_quota
+            spec.impl_author = impl_id
+            spec.judge_model = judge_id
+            uid = getattr(subtask, "id", "?")
+            spec.judge_logger = lambda decision, reason, _u=uid: store.record(
+                _u, UnitState.JUDGE_TIEBREAK, decision=decision, reason=reason)
         return spec
 
     proc = make_live_processor(policy=policy, gate_spec_for=gate_spec_for,
                                max_attempts=max_attempts, **maker_kw)
     result = run_dag(briefs, workdir=workdir, process_unit=proc, tracker=store, edges=edges,
                      merge_queue=merge_queue, failure_mode=failure_mode, resume_from=resume_from,
-                     atomicity=atomicity, best_of_n=best_of_n, confidence=confidence)
+                     atomicity=atomicity, best_of_n=best_of_n, confidence=confidence,
+                     reverify=reverify, cost_ceiling=cost_ceiling, checkpoint_path=checkpoint_path)
     return result, store
 
 

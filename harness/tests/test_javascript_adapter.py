@@ -53,11 +53,48 @@ def test_lint_and_format():
 
 
 def test_verify_dependency_invalid():
+    # invalid names rejected before the resolver; valid names delegate to the injected resolver
     assert JavaScriptAdapter().verify_dependency("bad name!") == "invalid"
-    assert JavaScriptAdapter().verify_dependency("react") == "unverified"
+    assert JavaScriptAdapter().verify_dependency("react", resolver=lambda n: True) == "ok"
 
 
 def test_run_tests_injected_runner():
     a = JavaScriptAdapter()
     rc, out = a.run_tests("npm test", ".", runner=lambda c, w: (0, "ok"))
     assert rc == 0
+
+
+# --- real npm-registry verify_dependency (slopsquatting guard) ---
+
+def test_verify_dependency_ok_when_registry_resolves():
+    from harness.lang.javascript_adapter import JavaScriptAdapter
+    a = JavaScriptAdapter()
+    assert a.verify_dependency("react", resolver=lambda n: True) == "ok"
+
+
+def test_verify_dependency_unresolvable_on_404():
+    from harness.lang.javascript_adapter import JavaScriptAdapter
+    a = JavaScriptAdapter()
+    assert a.verify_dependency("definitely-hallucinated-pkg", resolver=lambda n: False) == "unresolvable"
+
+
+def test_verify_dependency_unverified_when_offline():
+    from harness.lang.javascript_adapter import JavaScriptAdapter, NPM_OFFLINE
+    a = JavaScriptAdapter()
+    assert a.verify_dependency("react", resolver=lambda n: NPM_OFFLINE) == "unverified"
+    assert a.verify_dependency("react", resolver=lambda n: (_ for _ in ()).throw(OSError())) == "unverified"
+
+
+def test_verify_dependency_invalid_never_reaches_resolver():
+    from harness.lang.javascript_adapter import JavaScriptAdapter
+    a = JavaScriptAdapter()
+    called = []
+    for bad in ("../etc/passwd", "UPPER", "a b", "@scope", "@scope/", "@s/p/x", ""):
+        assert a.verify_dependency(bad, resolver=lambda n: called.append(n) or True) == "invalid"
+    assert called == []
+
+
+def test_verify_dependency_scoped_name_ok():
+    from harness.lang.javascript_adapter import JavaScriptAdapter
+    a = JavaScriptAdapter()
+    assert a.verify_dependency("@types/node", resolver=lambda n: True) == "ok"

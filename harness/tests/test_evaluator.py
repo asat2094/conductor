@@ -58,3 +58,9 @@ def test_evaluate_perfect_score(tmp_path):
     result = evaluate(subtask, AgentType.GEMMA4, [str(f)], "fix foo function done")
     # syntax=25, scope=20, semantic>=15, test=20 (no tests ran)
     assert result.score >= 70
+
+
+def test_run_tests_delegates_to_adapter_for_unknown_language():
+    # ADR-0035: a test-looking file with no adapter runner gets partial credit, not a pytest shell-out
+    from harness.evaluator import _run_tests
+    assert _run_tests(["test_thing.zig"]) == 20  # generic adapter -> no cmd -> 20, no crash

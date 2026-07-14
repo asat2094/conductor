@@ -115,7 +115,9 @@ class MergeQueue:
 
     @property
     def landed_waves(self) -> int:
-        """ADR-0041: number of waves promoted (fast-forwarded) to the target branch."""
+        """ADR-0041: number of waves promoted (fast-forwarded) to the target branch.
+        Wave-mode only — under atomicity="dag" promotion happens once at finalize(), so this
+        stays 0 there; read DagRunResult.assembly for the dag-mode outcome."""
         return self._landed_waves
 
     def promote_wave(self, assembly_ok: bool = True) -> str:

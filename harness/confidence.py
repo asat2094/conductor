@@ -58,3 +58,56 @@ class ConfidenceStore:
         if self._samples.get(k, 0) < MIN_SAMPLES:
             return True
         return self._score[k] >= FLOOR
+
+
+# --- persistence (ADR-0039: scores survive the session, seeded forward) ----------------------
+
+def load_store(db_path: str) -> ConfidenceStore:
+    """Load a ConfidenceStore from SQLite (same db as session_stats works). Missing db/table ->
+    empty store (cold start falls back to profile seeds)."""
+    import sqlite3
+    store = ConfidenceStore()
+    try:
+        db = sqlite3.connect(db_path)
+        rows = db.execute("SELECT model, task_type, score, samples FROM confidence").fetchall()
+        db.close()
+    except sqlite3.Error:
+        return store
+    for model, task_type, score, samples in rows:
+        store._score[_key(model, task_type)] = score
+        store._samples[_key(model, task_type)] = samples
+    return store
+
+
+def save_store(store: ConfidenceStore, db_path: str) -> None:
+    """Persist the store (upsert). Callers save at build end / wave boundaries."""
+    import sqlite3
+    db = sqlite3.connect(db_path)
+    db.execute("""CREATE TABLE IF NOT EXISTS confidence (
+        model TEXT NOT NULL, task_type TEXT NOT NULL,
+        score REAL NOT NULL, samples INTEGER NOT NULL,
+        PRIMARY KEY (model, task_type))""")
+    for (model, task_type), score in store._score.items():
+        db.execute(
+            "INSERT INTO confidence (model, task_type, score, samples) VALUES (?,?,?,?) "
+            "ON CONFLICT(model, task_type) DO UPDATE SET score=excluded.score, samples=excluded.samples",
+            (model, task_type, score, store._samples.get((model, task_type), 0)),
+        )
+    db.commit()
+    db.close()
+
+
+# --- ADR-0040 router trigger: size N from live confidence / stakes ----------------------------
+
+def best_of_n_policy(store: ConfidenceStore, model: str, *, n: int = 3,
+                     threshold: float = 0.5) -> "Callable[[dict], int]":
+    """Return a best_of_n callable for run_dag: N candidates when the maker's live confidence
+    for the brief's task_type is below `threshold` OR the brief is high-sensitivity; else 1.
+    The GATE still selects the winner (ADR-0040) — this only sizes the fan-out."""
+    def policy(brief: dict) -> int:
+        if brief.get("sensitivity") == "high":
+            return n
+        if store.get(model, brief.get("task_type", "code_edit")) < threshold:
+            return n
+        return 1
+    return policy

@@ -19,7 +19,15 @@ ROLE_DEFAULTS = {
     "impl_author": {"backend": "ollama", "model": "gemma4:latest"},
     "verifier":    {"backend": "claude_cli", "model": "haiku"},
     "checker":     {"backend": "claude_cli", "model": "haiku"},
+    # ADR-0038: the tiebreak judge MUST differ from impl_author (author-separation);
+    # sonnet ≠ the gemma4 impl default. A custom policy overrides per role.
+    "judge":       {"backend": "claude_cli", "model": "sonnet"},
 }
+
+
+def model_id(spec: dict) -> str:
+    """Stable identity string for author-separation comparisons (ADR-0007/0038)."""
+    return f"{spec.get('backend', '?')}:{spec.get('model', '?')}"
 
 
 def _bump(spec: dict) -> dict:

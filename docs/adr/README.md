@@ -47,6 +47,17 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0036](./0036-repo-native-style-gate.md) | Repo-native style gate (repo's own lint/format = mechanical oracle) | Accepted |
 | [0037](./0037-repo-onboarding-profile.md) | Repo onboarding / profile (detect language, tooling, standards) | Accepted |
 
+> **Implementation-status note (2026-07-14, post gap-review):** every designed gate is now
+> production-reachable from `python3 -m harness` / `build_live`: git-RED (0030) via `--tdd-gates`,
+> mutation (0008) + characterization (0010) via `GateSpec.extra_gates` / `gate_stages.py`,
+> codegraph reverify (0022) via `--codegraph`, spec probes (0032) via `--probes`, cost ceiling
+> (0014/0034) via `--budget`, checkpoints (0028) via `--checkpoint`, judge (0038) / confidence
+> (0039, SQLite-persisted) / best-of-N (0040) / per-wave merge (0041) via `build_live` knobs;
+> sensitivity boundary (0017) enforced in `rank_providers`. `strict_gates.py` remains the primitive
+> library; its author-separation lives in `role_policy` (+ judge author-check), its GREEN discipline
+> in the in-loop test + merge-queue full suite. The legacy one-off path (`harness.pipeline`) now
+> shares the adapter-based test scorer (0035).
+
 > **Borrow provenance (2026-06-30):** ADR-0028/0029/0031/0034 ← microsoft/conductor (patterns, MIT); 0030/0032 ← gsd-core; 0033 ← headroom. All re-implemented in-stack, vendor-neutral. **Explicitly NOT borrowed** (hampers core): LLM-judge `validator`/`dialog` gating as a *primary* accept mechanism (Law-1 violation — but see ADR-0038 for the narrow inconclusive-only tiebreak carve-out), static per-agent model choice (superseded by ADR-0039 dynamic confidence routing), ensemble/multi-round debate *voting on correctness* (consensus ≠ correct — but see ADR-0040: ensemble adopted in the bounded best-of-N form where the mechanical gate selects, never a vote), continuous autonomous loop, gsd Nyquist coverage-finder (declined — most model-trust-adjacent). **Deferred:** real-time web dashboard, capability-registry plugin contract, CacheAligner.
 | [0024](./0024-roles-are-model-assignments-context-isolation-invariant.md) | Roles are model-assignments; bounded-context isolation (not price) is the invariant | Accepted (foundational) |
 | [0025](./0025-property-based-metamorphic-gate.md) | Property-based + metamorphic testing as a first-class checker tier | Accepted |

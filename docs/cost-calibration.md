@@ -108,3 +108,11 @@ The enforce gate now:
 ---
 
 **Bottom line:** The harness is fully operational in audit mode. Calibration is a measurement + tuning task, not a correctness risk. Start in audit, gather real spend data, then calibrate threshold costs and switch to enforce.
+
+## Seeded defaults (2026-07-14)
+
+`providers.json` now ships non-zero blended $/1k-token seeds for cloud providers
+(deepseek 0.0014, gemini 0.00015, openrouter 0.001, nim 0.0005, opencode 0.001–0.0014;
+local gemma4 stays 0.0) so ROI ranking discriminates on cost out of the box. These are
+ballparks — run in `CostCeiling(mode="audit")` first and calibrate against real invoices
+before trusting enforce-mode budgets.

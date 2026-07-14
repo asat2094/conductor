@@ -37,6 +37,13 @@ class GateSpec:
     judge_quota: Any = None            # shared harness.judge.JudgeQuota across the DAG
     impl_author: str = "?"
     judge_model: str = "?"
+    # ADR-0038 audit trail: called with (decision, reason) on EVERY judge decision so the caller
+    # can emit a tracker JUDGE_TIEBREAK event. None -> no logging (unit-test convenience only).
+    judge_logger: Optional[Callable[[str, str], None]] = None
+    # Opt-in mechanical stages (ADR-0008 mutation / ADR-0010 characterization / ADR-0030 git-RED):
+    # [(name, fn(artifact) -> (ok, evidence))], run after acceptance, before style. Each stage must
+    # be deterministic — the seam exists so designed gates are production-reachable, never an LLM.
+    extra_gates: list = field(default_factory=list)
 
 
 @dataclass
@@ -74,6 +81,8 @@ def evaluate_unit(artifact: UnitArtifact, spec: GateSpec) -> GateOutcome:
             judge_call=lambda cs: "unit" if spec.judge(artifact) else None,
             impl_author=spec.impl_author, judge_model=spec.judge_model,
         )
+        if spec.judge_logger is not None:   # ADR-0038: every judge decision is logged
+            spec.judge_logger(r.decision, r.reason)
         accepted = (r.decision == "select")
         results.append(("judge", accepted))
         if not accepted:
@@ -83,6 +92,13 @@ def evaluate_unit(artifact: UnitArtifact, spec: GateSpec) -> GateOutcome:
         results.append(("acceptance", accepted))
         if not accepted:
             return GateOutcome(False, "acceptance failed (in-loop green and/or held-out oracle)", results)
+
+    # opt-in mechanical stages (mutation / characterization / git-RED) — short-circuit like the rest
+    for gate_name, gate_fn in spec.extra_gates:
+        ok, evidence = gate_fn(artifact)
+        results.append((gate_name, ok))
+        if not ok:
+            return GateOutcome(False, f"{gate_name}: {evidence}", results)
 
     # repo-native style gate (ADR-0036): mechanical — runs the repo's own lint/format. Degrade-clean
     # when no adapter configured or no tooling detected (status 'no-style-tooling' -> pass).
