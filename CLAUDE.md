@@ -90,12 +90,25 @@ When evaluator score < 70, call `auto_heal()` — it tries strategy A (shrink) t
 
 `load_profiles()` applies ~2%/day decay toward 0.5 (neutral) based on `last_updated` timestamp. Prevents stale high scores from over-routing to gemma4 after a long gap.
 
+## Model evaluation (evalkit — generic framework, ADR-0042)
+
+```bash
+# Evaluate ANY model over the default grid (or a bring-your-own suite); objective merit scorecard.
+python3 -m harness.evalkit --model gemma4 --text
+python3 -m harness.evalkit --model gemma4 --model sonnet --report card.json   # rank several
+python3 -m harness.evalkit --model gemma4 --suite my_suite.json               # BYO tasks
+python3 -m harness.evalkit --model gemma4 --ingest                            # feed routing profiles
+```
+Library: `from harness.evalkit import calibrate, default_suite, load_suite, ingest, register_dimension`.
+Pluggable `Dimension` (accuracy/latency/cost_per_pass/refusal_rate/context_degradation/reliable_context)
++ mechanical `Grader` (syntax via LanguageAdapter, keyword, oracle, composite). Objective/deterministic.
+
 ## Development
 
 ```bash
 bash setup.sh          # idempotent setup + prereq check
-/opt/homebrew/bin/pytest -q   # run all 47 tests
-python3 gemma4-bench/bench.py  # recalibrate capability profiles (15-30 min)
+/opt/homebrew/bin/pytest -q   # run the full test suite
+python3 gemma4-bench/bench.py  # calibrate gemma4 (thin evalkit client; == python3 -m harness.evalkit --model gemma4 --ingest)
 ```
 
 Key files:

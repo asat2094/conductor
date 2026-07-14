@@ -67,3 +67,4 @@ The 2026-05-29 multi-provider spec's routing and rate-limit decisions are **Supe
 | [0039](./0039-adaptive-confidence-scored-routing.md) | Adaptive confidence-scored routing (live per-(model, task-type) feedback) | Accepted (extends 0015/0006/0016) |
 | [0040](./0040-ensemble-best-of-n-maker.md) | Ensemble as best-of-N maker (gate-selected, not vote-on-correctness) | Accepted (amends 0004) |
 | [0041](./0041-per-wave-atomic-merge.md) | Per-wave atomic merge (closed-subgraph landing) | Accepted (amends 0012, un-parks 0029) |
+| [0042](./0042-generic-model-evaluation-framework.md) | Generic pluggable model-evaluation framework (evalkit, objective merit scoring) | Accepted (supersedes gemma4-locked bench) |

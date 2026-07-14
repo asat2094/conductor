@@ -32,6 +32,19 @@ def _default_http(url: str, payload: dict) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _openai_http(api_key: Optional[str]) -> Callable[[str, dict], dict]:
+    """Default HTTP caller for openai_compat: POST chat/completions with Bearer auth."""
+    def _http(url: str, payload: dict) -> dict:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    return _http
+
+
 def call_model(
     spec: dict,
     prompt: str,
@@ -70,6 +83,20 @@ def call_model(
         payload = {"model": model, "prompt": prompt, "stream": False}
         resp = _http(url, payload)
         return resp["response"]
+
+    if backend == "openai_compat":
+        import os
+        base_url = spec["base_url"]
+        key_env = spec.get("api_key_env")
+        api_key = os.environ.get(key_env) if key_env else None
+        if key_env and not api_key:
+            # config error -> propagates (fail loud); NEVER silently scored as a refusal.
+            raise ValueError(f"missing API key env {key_env!r} for openai_compat model {model!r}")
+        _http = http if http is not None else _openai_http(api_key)
+        url = base_url.rstrip("/") + "/chat/completions"
+        payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+        resp = _http(url, payload)
+        return resp["choices"][0]["message"]["content"]
 
     raise ValueError(f"Unknown backend: {backend!r}")
 
