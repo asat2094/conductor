@@ -117,6 +117,99 @@ def test_run_dag_all_or_nothing_discards_on_any_failure():
     assert res.assembly == "discard"    # one failure discards the whole build
 
 
+def test_run_dag_best_of_n_gate_selects_first_passing_candidate():
+    # first candidate fails the gate, second passes -> gate selects the second (no vote)
+    scores = iter([30, 88])
+    def proc(st, w):
+        return _FakeVerdict(next(scores))
+    res = run_dag([A], workdir=".", process_unit=proc, best_of_n=lambda b: 3)
+    assert res.board["a"]["state"] == UnitState.ACCEPTED
+    assert res.board["a"]["candidates"] == 2      # stopped at first pass, didn't exhaust N=3
+    assert res.accepted == 1
+
+
+def test_run_dag_best_of_n_fails_when_no_candidate_passes():
+    def proc(st, w):
+        return _FakeVerdict(20)
+    res = run_dag([A], workdir=".", process_unit=proc, best_of_n=lambda b: 3)
+    assert res.board["a"]["state"] == UnitState.FAILED
+    assert res.failed == 1
+
+
+def test_run_dag_best_of_n_default_is_single_maker():
+    calls = []
+    def proc(st, w):
+        calls.append(st.id)
+        return _FakeVerdict(90)
+    res = run_dag([A], workdir=".", process_unit=proc)   # no best_of_n -> N=1
+    assert calls == ["a"]
+    assert res.board["a"]["candidates"] == 1
+
+
+def test_run_dag_best_of_n_records_each_candidate_confidence():
+    from harness.confidence import ConfidenceStore
+    conf = ConfidenceStore()
+    seq = iter([_FakeVerdict(20, "gemma4"), _FakeVerdict(20, "gemma4"), _FakeVerdict(90, "gemini")])
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: next(seq),
+                  best_of_n=lambda b: 3, confidence=conf)
+    assert res.accepted == 1
+    # both failing gemma4 candidates AND the winning gemini candidate are recorded (not just the last)
+    assert conf.samples("gemma4", A["task_type"]) == 2
+    assert conf.samples("gemini", A["task_type"]) == 1
+
+
+def test_run_dag_wave_atomic_does_not_count_resumed_wave_as_landed():
+    from harness.merge_queue import MergeQueue
+    from harness.checkpoint import make_checkpoint
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    ckpt = make_checkpoint({"a": {"state": "ACCEPTED"}})
+    # wave 'a' is resumed (nothing merged this run); only 'b' actually lands
+    res = run_dag([B, A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90),
+                  merge_queue=mq, resume_from=ckpt)
+    assert res.landed_waves == 1          # not 2 — resumed wave merged nothing
+    assert res.assembly == "ff_to_target"
+
+
+def test_run_dag_wave_atomic_inline_only_wave_not_counted_landed():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    tiny = {**A, "id": "t", "estimated_tokens": 100}   # cost-skipped to inline, never merged
+    res = run_dag([tiny], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), merge_queue=mq)
+    assert res.landed_waves == 0 and res.held_waves == 0
+    assert res.assembly == "ff_to_target"   # clean: nothing held
+
+
+def test_run_dag_wave_atomic_lands_all_clean_waves():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    # two waves (a then b); both GREEN -> both land -> ff whole build
+    res = run_dag([B, A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), merge_queue=mq)
+    assert res.assembly == "ff_to_target"
+    assert res.landed_waves == 2 and res.held_waves == 0
+
+
+def test_run_dag_wave_atomic_partial_holds_failing_wave_and_successors():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    # wave0=a GREEN (lands), wave1=b FAILS gate -> wave1 held, prefix preserved
+    def proc(st, w):
+        return _FakeVerdict(90) if st.id == "a" else _FakeVerdict(20)
+    res = run_dag([B, A], workdir=".", process_unit=proc, merge_queue=mq)
+    assert res.assembly == "partial"
+    assert res.landed_waves == 1 and res.held_waves == 1
+    assert res.accepted == 1 and res.failed == 1
+
+
+def test_run_dag_dag_atomicity_opt_in_discards_on_partial():
+    from harness.merge_queue import MergeQueue
+    mq = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    def proc(st, w):
+        return _FakeVerdict(90) if st.id == "a" else _FakeVerdict(20)
+    # strict whole-or-nothing: one failed unit discards the whole build
+    res = run_dag([B, A], workdir=".", process_unit=proc, merge_queue=mq, atomicity="dag")
+    assert res.assembly == "discard"
+
+
 def test_run_dag_resume_skips_accepted_units():
     from harness.checkpoint import make_checkpoint
     ckpt = make_checkpoint({"a": {"state": "ACCEPTED"}})

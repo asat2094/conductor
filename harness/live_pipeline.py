@@ -51,6 +51,11 @@ def build_live(
     merge_queue: Any = None,
     failure_mode: str = "continue_on_error",
     resume_from: Optional[dict] = None,
+    atomicity: str = "wave",
+    best_of_n: Optional[Callable[[dict], int]] = None,
+    confidence: Any = None,
+    judge: Optional[Callable[[Any], bool]] = None,
+    judge_quota: Any = None,
     **maker_kw: Any,
 ):
     """One-call live build: onboard repo -> decompose -> verify -> per-wave dispatch through REAL
@@ -61,7 +66,12 @@ def build_live(
     (ADR-0036) — the repo's own lint/format as a mechanical gate (default off to keep runs clean when
     tooling isn't installed). `merge_queue`/`failure_mode`/`resume_from` thread the ADR-0028/0029
     integration. progress streams a live PM view; progress_path feeds an external PM tool (JSONL).
-    Harness-derived (NFR-TRACK-1) — sinks report, never change a verdict."""
+    Harness-derived (NFR-TRACK-1) — sinks report, never change a verdict.
+    `atomicity` (ADR-0041): 'wave' (default, per-wave landing) | 'dag' (whole-or-nothing). `best_of_n`
+    (ADR-0040) + `confidence` (ADR-0039) thread through to run_dag; `confidence` should be the SAME
+    ConfidenceStore passed to orchestrate's rank_providers to close the routing feedback loop. `judge`
+    (ADR-0038) opt-in enables the inconclusive-only tiebreak in the gate (needs no-test units to signal
+    in_loop_green=None)."""
     from harness.run_dag import run_dag
     from harness.tracker_store import TrackerStore
     from harness.progress import live_sink, jsonl_sink
@@ -84,12 +94,16 @@ def build_live(
         spec.workdir = workdir
         if style:
             spec.style_adapter = adapter   # ADR-0036 repo-native style gate
+        if judge is not None:              # ADR-0038 inconclusive-only judge tiebreak (opt-in)
+            spec.judge = judge
+            spec.judge_quota = judge_quota
         return spec
 
     proc = make_live_processor(policy=policy, gate_spec_for=gate_spec_for,
                                max_attempts=max_attempts, **maker_kw)
     result = run_dag(briefs, workdir=workdir, process_unit=proc, tracker=store, edges=edges,
-                     merge_queue=merge_queue, failure_mode=failure_mode, resume_from=resume_from)
+                     merge_queue=merge_queue, failure_mode=failure_mode, resume_from=resume_from,
+                     atomicity=atomicity, best_of_n=best_of_n, confidence=confidence)
     return result, store
 
 

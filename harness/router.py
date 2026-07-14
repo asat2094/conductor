@@ -43,12 +43,18 @@ def rank_providers(
     providers: dict,
     profiles: dict[str, CapabilityProfile],
     busy_providers: set[str] | None = None,
+    confidence: "object | None" = None,
 ) -> list[str]:
     """
-    Return provider names ordered by cost-normalised accuracy.
-    claude_agent is always appended last as the final fallback.
-    Skips providers that are busy, over token limit, below accuracy threshold,
-    or at session failure budget.
+    Return provider names ordered by ROI (reliability / cost), claude_agent last.
+    Skips providers that are busy, over token limit, below the reliability
+    threshold, or at session failure budget.
+
+    ADR-0039: when a `confidence` store (harness.confidence.ConfidenceStore) is
+    passed, the live per-(model, task_type) score REPLACES the static profile
+    accuracy as the reliability estimate (seeded from that accuracy). A model on
+    a cold streak drops below threshold and is skipped until it re-earns. Ranking
+    stays deterministic given the score vector. confidence=None -> current behavior.
     """
     busy = busy_providers or set()
 
@@ -68,10 +74,14 @@ def rank_providers(
             continue
         if profile.session_failures >= profile.retry_budget:
             continue
-        accuracy = profile.accuracy_by_type.get(subtask.type.value, 0.7)
-        if accuracy < 0.70:
+        seed = profile.accuracy_by_type.get(subtask.type.value, 0.7)
+        reliability = (
+            confidence.get(name, subtask.type.value, seed=seed)
+            if confidence is not None else seed
+        )
+        if reliability < 0.70:
             continue
-        score = accuracy / (config.cost_per_1k_tokens + 0.0001)
+        score = reliability / (config.cost_per_1k_tokens + 0.0001)
         candidates.append((name, score))
 
     ranked = [name for name, _ in sorted(candidates, key=lambda x: -x[1])]

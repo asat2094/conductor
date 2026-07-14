@@ -18,6 +18,7 @@ class UnitState:
     INLINE = "INLINE"
     ACCEPTED = "ACCEPTED"
     FAILED = "FAILED"
+    JUDGE_TIEBREAK = "JUDGE_TIEBREAK"   # ADR-0038: judge decided an inconclusive slice (logged + quota'd)
 
 
 @dataclass

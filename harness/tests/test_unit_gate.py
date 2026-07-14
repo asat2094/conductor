@@ -44,3 +44,37 @@ def test_high_stakes_requires_oracle():
 def test_low_stakes_no_oracle_passes_on_green():
     out = evaluate_unit(_art(oracle_passed=None), GateSpec(high_stakes=False))
     assert out.passed is True
+
+
+# --- ADR-0038 inconclusive-only judge tiebreak ---
+
+def test_judge_decides_when_no_correctness_gate_exists():
+    # no props, no examples, no oracle, no in-loop test signal -> inconclusive -> judge decides
+    art = _art(in_loop_green=None, oracle_passed=None)
+    out = evaluate_unit(art, GateSpec(judge=lambda a: True, impl_author="gemma4", judge_model="sonnet"))
+    assert out.passed is True
+    assert ("judge", True) in out.results
+
+
+def test_judge_reject_fails_the_unit():
+    art = _art(in_loop_green=None, oracle_passed=None)
+    out = evaluate_unit(art, GateSpec(judge=lambda a: False, impl_author="gemma4", judge_model="sonnet"))
+    assert out.passed is False
+    assert "judge" in out.evidence
+
+
+def test_judge_not_consulted_when_a_mechanical_signal_exists():
+    # in-loop tests passed -> that IS the gate; the judge must NOT fire even if configured
+    def _boom(a):
+        raise AssertionError("judge must not be called when a mechanical signal exists")
+    out = evaluate_unit(_art(in_loop_green=True, oracle_passed=None),
+                        GateSpec(judge=_boom, impl_author="gemma4", judge_model="sonnet"))
+    assert out.passed is True
+    assert [g for g, ok in out.results] == ["scope_guard", "pbt", "acceptance"]
+
+
+def test_judge_author_collision_escalates_not_accepts():
+    art = _art(in_loop_green=None, oracle_passed=None)
+    out = evaluate_unit(art, GateSpec(judge=lambda a: True, impl_author="gemma4", judge_model="gemma4"))
+    assert out.passed is False
+    assert "escalate" in out.evidence

@@ -128,6 +128,35 @@ def test_rank_providers_prefers_cheaper_at_equal_accuracy():
     assert ranked[0] == "gemini"  # cheaper: 0.00015 vs 0.0014
 
 
+# --- ADR-0039 confidence-scored routing ---
+
+def test_rank_providers_live_confidence_skips_cold_streak_model():
+    from harness.router import rank_providers
+    from harness.confidence import ConfidenceStore
+    # gemma4 is free -> normally first. A cold streak drops its live score below 0.70 -> skipped.
+    conf = ConfidenceStore()
+    for _ in range(12):
+        conf.update("gemma4", "code_edit", passed=False, seed=0.85)
+    ranked = rank_providers(_rp_task(), _rp_providers(), _rp_profiles(), confidence=conf)
+    assert "gemma4" not in ranked[:-1]          # dropped by live confidence, not profile
+    assert ranked[-1] == "claude_agent"
+
+
+def test_rank_providers_confidence_none_matches_static():
+    from harness.router import rank_providers
+    a = rank_providers(_rp_task(), _rp_providers(), _rp_profiles())
+    b = rank_providers(_rp_task(), _rp_providers(), _rp_profiles(), confidence=None)
+    assert a == b                               # backward-compat: no store -> identical
+
+
+def test_rank_providers_cold_start_confidence_keeps_static_order():
+    from harness.router import rank_providers
+    from harness.confidence import ConfidenceStore
+    conf = ConfidenceStore()                    # empty -> seeds == profile accuracy
+    ranked = rank_providers(_rp_task(), _rp_providers(), _rp_profiles(), confidence=conf)
+    assert ranked[0] == "gemma4"                # free provider still first
+
+
 # --- cost_skip tests ---
 
 def _st(tokens, ttype=TaskType.CODE_EDIT):

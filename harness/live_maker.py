@@ -137,11 +137,16 @@ class LiveMaker:
         file_writer: Optional[Callable] = None,
         differ: Optional[Callable] = None,
         test_runner: Optional[Callable] = None,
+        no_test_inconclusive: bool = False,
     ) -> None:
         self.workdir = workdir
         self.role = role
         self.policy = policy
         self.high_stakes = high_stakes
+        # ADR-0038: when True, a unit with NO test command reports in_loop_green=None (inconclusive)
+        # so the gate routes it to the judge tiebreak instead of auto-passing. Default False keeps the
+        # historical "no test = partial credit" behavior.
+        self.no_test_inconclusive = no_test_inconclusive
 
         self._model_caller = model_caller if model_caller is not None else call_model
         self._file_writer = file_writer  # None -> use default below
@@ -206,13 +211,14 @@ class LiveMaker:
 
     # ------------------------------------------------------------------
 
-    def _run_in_loop_test(self, subtask: Any) -> bool:
+    def _run_in_loop_test(self, subtask: Any) -> Optional[bool]:
         """Determine the in-loop test command and run it.
 
         Priority (language-agnostic, ADR-0035):
           1. subtask.verify_cmd (if present and truthy)
           2. the per-file LanguageAdapter's discover_test_cmd (pytest / npm test / go test / ...)
-          3. No test command found -> return True (partial credit, not maker's fault)
+          3. No test command found -> True (partial credit) by default, or None (inconclusive,
+             ADR-0038) when `no_test_inconclusive` is set — routes the unit to the judge tiebreak.
         """
         verify_cmd: Optional[str] = getattr(subtask, "verify_cmd", None)
         if verify_cmd:
@@ -226,7 +232,7 @@ class LiveMaker:
         adapter = adapter_for_path(files[0]) if files else adapter_for_path("")
         cmd = adapter.discover_test_cmd(files, self.workdir)
         if not cmd:
-            return True  # no test = partial credit, runner NOT called
+            return None if self.no_test_inconclusive else True  # ADR-0038: None -> judge; else partial credit
         rc, _ = self._test_runner(cmd, self.workdir)
         return rc == 0
 

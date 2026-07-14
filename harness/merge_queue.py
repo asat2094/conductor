@@ -13,10 +13,12 @@ Accepted units are merged one-at-a-time onto a disposable integration branch
 and the FULL suite re-runs after each merge.  This catches seam drift that a
 per-unit gate would miss.
 
-The build is ATOMIC at the DAG level:
-  * fast-forward to the target branch ONLY if every unit merged AND the
-    whole-DAG assembly check is green;
-  * any permanent failure aborts and discards the integration branch.
+Two atomicity modes (ADR-0012 / ADR-0041), chosen by the caller (run_dag):
+  * DAG-atomic (`finalize`): fast-forward to target ONLY if every unit merged
+    AND the whole-DAG assembly check is green; any failure discards the branch.
+  * Per-wave atomic (`promote_wave`, default in run_dag): each fully-GREEN wave
+    fast-forwards as it completes; the first failing wave + successors are held
+    (prefix rule), so the landed set is always a dependency-closed GREEN prefix.
 
 All git / test I/O is delegated to injected callables so the implementation
 can be tested without a real git repository.
@@ -59,6 +61,8 @@ class MergeQueue:
         self._suite_runner = suite_runner
         self._merger: Callable[[str], Tuple[bool, str]] = merger if merger is not None else lambda _u: (True, "")
         self._failed: bool = False
+        self._held: bool = False          # ADR-0041: once a wave holds, all later waves hold (prefix rule)
+        self._landed_waves: int = 0       # ADR-0041: count of waves fast-forwarded to target
 
     # ------------------------------------------------------------------
     # Public API
@@ -108,6 +112,29 @@ class MergeQueue:
             suite_passed=True,
             detail=suite_detail,
         )
+
+    @property
+    def landed_waves(self) -> int:
+        """ADR-0041: number of waves promoted (fast-forwarded) to the target branch."""
+        return self._landed_waves
+
+    def promote_wave(self, assembly_ok: bool = True) -> str:
+        """Per-wave atomic promotion (ADR-0041, REQ-I6).
+
+        Called at a wave boundary in ``atomicity="wave"`` mode. Fast-forwards the
+        wave's merged units to the target branch ONLY if the queue has seen no
+        failure, no earlier wave has held, and the wave's assembly check is green.
+
+        The prefix rule: once any wave holds (a failure or a red assembly), this
+        queue is marked ``_held`` and every subsequent wave holds too — so the
+        landed set is always a dependency-closed GREEN prefix. Returns
+        ``"ff_wave"`` (promoted) or ``"hold"`` (held, not landed).
+        """
+        if self._failed or self._held or not assembly_ok:
+            self._held = True
+            return "hold"
+        self._landed_waves += 1
+        return "ff_wave"
 
     def finalize(self, assembly_ok: bool = True) -> str:
         """Decide the fate of the integration branch.

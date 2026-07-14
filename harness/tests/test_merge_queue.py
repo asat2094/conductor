@@ -40,3 +40,32 @@ def test_finalize_discard_when_assembly_fails_even_if_units_clean():
     q = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
     q.submit("u1")
     assert q.finalize(assembly_ok=False) == "discard"
+
+
+# --- ADR-0041 per-wave atomic promotion ---
+
+def test_promote_wave_ff_when_clean_and_counts_landed():
+    q = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    q.submit("u1")
+    assert q.promote_wave(assembly_ok=True) == "ff_wave"
+    assert q.landed_waves == 1
+    q.submit("u2")
+    assert q.promote_wave(assembly_ok=True) == "ff_wave"
+    assert q.landed_waves == 2
+
+
+def test_promote_wave_holds_on_assembly_fail_and_stays_held():
+    q = MergeQueue(suite_runner=lambda: (True, ""), merger=lambda u: (True, ""))
+    q.submit("u1")
+    assert q.promote_wave(assembly_ok=False) == "hold"   # this wave's assembly red
+    assert q.landed_waves == 0
+    q.submit("u2")
+    assert q.promote_wave(assembly_ok=True) == "hold"     # prefix rule: stays held
+    assert q.landed_waves == 0
+
+
+def test_promote_wave_holds_after_a_submit_failure():
+    q = MergeQueue(suite_runner=lambda: (False, "broke"), merger=lambda u: (True, ""))
+    q.submit("u1")                                        # sets _failed
+    assert q.promote_wave(assembly_ok=True) == "hold"
+    assert q.landed_waves == 0
