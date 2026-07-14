@@ -134,11 +134,16 @@ export CONDUCTOR_DEFAULT_MAKER="deepseek" # prefer free DeepSeek Zen
 
 ### Capability profiles (live-updated)
 
-`harness/capability_profiles.json` tracks per-model accuracy by task type (code_edit, code_gen, test_write). Profiles are updated in-session as units are evaluated and decay toward neutral between sessions (ADR-0029). To recalibrate from scratch:
+`harness/capability_profiles.json` tracks per-model accuracy by task type (code_edit, code_gen, test_write). Profiles are updated in-session as units are evaluated and decay toward neutral between sessions. Calibrate from scratch via **evalkit** — the generic, model-agnostic evaluation framework (ADR-0042) that produces an objective, ranked merit scorecard across pluggable dimensions (accuracy, latency, cost-per-pass, refusal rate, context degradation, reliable context):
 
 ```bash
-python3 gemma4-bench/bench.py  # ~15-30 min, runs 30 trials across token sizes
+python3 -m harness.evalkit --model gemma4 --ingest --text   # calibrate + feed routing profiles
+python3 -m harness.evalkit --model gemma4 --model sonnet --report card.json   # rank several models
+python3 -m harness.evalkit --model gemma4 --suite my_suite.json               # bring your own tasks
+python3 gemma4-bench/bench.py  # backward-compat: a thin evalkit client for gemma4
 ```
+
+evalkit is reusable anywhere model evaluation is needed — mechanical graders (no model judges output, Law 1/2), pluggable `Dimension` axes, built-in + bring-your-own suites, published objective report; feeding routing is an explicit opt-in `ingest()` step.
 
 ---
 

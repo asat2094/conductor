@@ -45,3 +45,30 @@ def test_extract_multiple_files():
 
 def test_extract_none_returns_empty():
     assert extract_files("no file blocks here") == {}
+
+
+# --- openai_compat backend (ADR-0042 cloud evaluation) ---
+
+def test_call_model_openai_compat_happy_path():
+    from harness.model_call import call_model
+    captured = {}
+    def fake_http(url, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "hello from cloud"}}]}
+    spec = {"backend": "openai_compat", "model": "deepseek-v4", "base_url": "https://api.x.com/v1",
+            "api_key_env": None}
+    out = call_model(spec, "hi", http=fake_http)
+    assert out == "hello from cloud"
+    assert captured["url"] == "https://api.x.com/v1/chat/completions"
+    assert captured["payload"]["messages"][0]["content"] == "hi"
+
+
+def test_call_model_openai_compat_missing_key_raises(monkeypatch):
+    from harness.model_call import call_model
+    monkeypatch.delenv("FAKE_KEY", raising=False)
+    spec = {"backend": "openai_compat", "model": "m", "base_url": "https://x/v1",
+            "api_key_env": "FAKE_KEY"}
+    import pytest
+    with pytest.raises(ValueError, match="missing API key"):
+        call_model(spec, "hi")     # fail loud — never returns, never scored 0
