@@ -1,7 +1,7 @@
 # Multi-Provider Harness Design
 
 **Date:** 2026-05-29  
-**Status:** Approved  
+**Status:** Approved (implemented on `develop`) — routing / rate-limit / escalation decisions **Superseded by [ADR-0014](../../adr/0014-admission-separate-from-routing.md) and [ADR-0015](../../adr/0015-deterministic-routing-supersedes-binary-route.md)**. Current source of truth: [specs/conductor/requirements.md](../../specs/conductor/requirements.md).  
 **Scope:** Extend conductor to support NVIDIA NIM, Gemini, DeepSeek, OpenRouter, OpenCode Zen alongside gemma4. Single orchestrator entry point with metric-based routing, seamless fallback, incremental scoring, and one-task-per-model dispatch.
 
 ---

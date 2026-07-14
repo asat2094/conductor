@@ -1,5 +1,25 @@
 from harness.models import SubTask, TaskType, AgentType, EvalResult, CapabilityProfile
 
+
+def test_new_task_types_exist():
+    assert TaskType.REFACTOR.value == "refactor"
+    assert TaskType.SIGNATURE_CHANGE.value == "signature_change"
+    assert TaskType.PERF.value == "perf"
+
+
+def test_claude_inline_agent_exists():
+    assert AgentType.CLAUDE_INLINE.value == "claude_inline"
+
+
+def test_subtask_new_fields_default_empty_and_low():
+    st = SubTask(id="t1", description="d", type=TaskType.CODE_EDIT, files=["a.py"], estimated_tokens=100)
+    assert st.sensitivity == "low"
+    assert st.writes_files == []
+    assert st.produces == []
+    assert st.consumes == []
+    assert st.logical_deps == []
+
+
 def test_subtask_defaults():
     t = SubTask(
         id="t1",

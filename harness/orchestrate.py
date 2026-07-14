@@ -79,6 +79,7 @@ def orchestrate(
     diff_mode: bool = False,
     _busy: set | None = None,
     _busy_lock: threading.Lock | None = None,
+    confidence: object | None = None,
 ) -> EvalResult:
     """
     Try ranked providers in order until one scores >= 70.
@@ -97,7 +98,8 @@ def orchestrate(
     lock = _busy_lock or threading.Lock()
 
     with lock:
-        ranked = rank_providers(subtask, providers, profiles, busy)
+        # ADR-0039: pass the live confidence store so ranking uses per-(model,task_type) live scores.
+        ranked = rank_providers(subtask, providers, profiles, busy, confidence=confidence)
 
     for provider_name in ranked:
         if provider_name == "claude_agent":

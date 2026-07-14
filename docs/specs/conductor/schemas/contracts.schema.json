@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conductor/contracts.schema.json",
+  "title": "Contracts",
+  "description": "Frozen cross-subtask seam contracts. Orchestrator-owned, frozen at decompose time, READ-ONLY to makers (REQ-I3, ADR-0012). Conformance checked via harness AST extraction, not the maker envelope.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "seams"],
+  "properties": {
+    "version": { "type": "string" },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seam_id", "producer_unit", "consumer_units", "signature"],
+        "properties": {
+          "seam_id": { "type": "string" },
+          "producer_unit": { "type": "string" },
+          "consumer_units": { "type": "array", "items": { "type": "string" } },
+          "signature": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["symbol", "params", "returns"],
+            "properties": {
+              "symbol": { "type": "string" },
+              "params": { "type": "array", "items": { "type": "string" } },
+              "returns": { "type": "string" },
+              "error_modes": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "behavioral_examples": {
+            "type": "array",
+            "description": "Pact-lite interaction examples, property-generated over declared ranges (ADR-0012) — closes the syntactic-only gap",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["given", "expect"],
+              "properties": {
+                "given": { "type": "string" },
+                "expect": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

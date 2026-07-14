@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "conductor/maker_envelope.schema.json",
+  "title": "MakerEnvelope",
+  "description": "Structured maker output. Routing/health signal ONLY — never gate evidence (REQ-C1, ADR-0002). The harness re-derives all gate facts from the written files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit_id", "role", "status", "changed_files"],
+  "properties": {
+    "unit_id": { "type": "string" },
+    "role": { "type": "string", "enum": ["test_author", "impl_author", "verifier"] },
+    "status": {
+      "type": "string",
+      "enum": ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"],
+      "description": "self-reported; corroborated by evaluator score, never trusted alone (REQ-OBS3)"
+    },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "exported_signatures": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "self-reported signatures — IGNORED for conformance; harness AST-extracts the truth (ADR-0012)"
+    },
+    "self_output": { "type": "string", "description": "free-text; downweighted to ~0 in scoring (REQ-C1)" }
+  }
+}
