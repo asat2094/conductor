@@ -34,3 +34,28 @@ def test_cli_checkpoint_written(tmp_path):
     ck = tmp_path / "ck.json"
     main([str(p), "--workdir", str(tmp_path), "--checkpoint", str(ck)])
     assert ck.exists()
+
+
+def test_cli_merge_target_lands_on_clean_repo(tmp_path):
+    """--merge-target end-to-end on a CLEAN repo: inline unit -> no merge, main untouched, rc 0."""
+    import subprocess
+    from harness.__main__ import main
+    subprocess.run("git init -q -b main && git -c core.hooksPath=/dev/null commit -q --no-verify --allow-empty -m root",
+                   shell=True, cwd=tmp_path, check=True)
+    p = tmp_path / "briefs.json"
+    p.write_text(json.dumps(TINY))
+    subprocess.run("git add briefs.json && git -c core.hooksPath=/dev/null commit -q --no-verify -m briefs",
+                   shell=True, cwd=tmp_path, check=True)
+    rc = main([str(p), "--workdir", str(tmp_path), "--merge-target", "main"])
+    assert rc == 0
+
+
+def test_cli_merge_target_dirty_tree_fails_loud(tmp_path):
+    import subprocess, pytest
+    from harness.__main__ import main
+    subprocess.run("git init -q -b main && git -c core.hooksPath=/dev/null commit -q --no-verify --allow-empty -m root",
+                   shell=True, cwd=tmp_path, check=True)
+    p = tmp_path / "briefs.json"
+    p.write_text(json.dumps(TINY))                      # untracked -> dirty
+    with pytest.raises(RuntimeError, match="dirty"):
+        main([str(p), "--workdir", str(tmp_path), "--merge-target", "main"])

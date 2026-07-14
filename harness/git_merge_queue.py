@@ -50,6 +50,17 @@ class GitMergeQueue(MergeQueue):
         self._writes_for = writes_for
         self._git = run if run is not None else _git
         self._shell = shell if shell is not None else self._default_shell
+        # SAFETY: refuse a dirty tree. `checkout -B` carries uncommitted tracked edits onto the
+        # integration branch, where the first submit() would commit them as unit work and
+        # promote_wave would land them on the target — operator work shipped silently. Fail loud.
+        rc, out = self._git(["status", "--porcelain"], workdir)
+        if rc != 0:
+            raise RuntimeError(f"not a usable git repo: {out}")
+        if out.strip():
+            raise RuntimeError(
+                "working tree is dirty — commit or stash local changes before a conductor "
+                f"merge build:\n{out.strip()}"
+            )
         # (re)create the integration branch at the target's tip and check it out
         rc, out = self._git(["checkout", "-B", INTEGRATION_BRANCH, target_branch], workdir)
         if rc != 0:

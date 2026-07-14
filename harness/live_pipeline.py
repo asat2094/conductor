@@ -126,18 +126,25 @@ def build_live(
         from harness.judge import JudgeQuota
         from harness.role_policy import resolve_model, model_id
         from harness.tracker import UnitState
-        impl_id = model_id(resolve_model("impl_author", policy=policy,
-                                         high_stakes=maker_kw.get("high_stakes", False)))
         judge_id = judge_model or model_id(resolve_model("judge", policy=policy))
         if judge_quota is None:
             judge_quota = JudgeQuota(limit=max(1, math.ceil(0.10 * len(briefs))))
 
+        def _impl_id_for(subtask):
+            # MUST mirror LiveMaker.make's resolution exactly: high-sensitivity units get a
+            # bumped-tier maker, so author-separation must compare against the BUMPED identity —
+            # a stale unbumped id could let the judge accept its own output under a custom policy.
+            stakes = maker_kw.get("high_stakes", False) or getattr(subtask, "sensitivity", "low") == "high"
+            return model_id(resolve_model("impl_author", policy=policy, high_stakes=stakes))
+
     def gate_spec_for(subtask):
         spec = default_gate_spec_for(subtask)
         spec.workdir = workdir
-        # ADR-0017 ↔ ADR-0026: high-sensitivity units are high-stakes by default —
-        # the held-out oracle becomes mandatory for them.
-        if getattr(subtask, "sensitivity", "low") == "high":
+        # ADR-0017 ↔ ADR-0026: stakes are unified with the maker's resolution — a high-stakes
+        # maker config or a high-sensitivity unit both make the held-out oracle mandatory.
+        # This also structurally closes the judge path for any bumped-tier unit (the judge only
+        # fires when high_stakes is False), so author-separation can never see a stale identity.
+        if maker_kw.get("high_stakes", False) or getattr(subtask, "sensitivity", "low") == "high":
             spec.high_stakes = True
         if style:
             spec.style_adapter = adapter   # ADR-0036 repo-native style gate
@@ -149,7 +156,7 @@ def build_live(
         if judge is not None:              # ADR-0038 inconclusive-only judge tiebreak (opt-in)
             spec.judge = judge
             spec.judge_quota = judge_quota
-            spec.impl_author = impl_id
+            spec.impl_author = _impl_id_for(subtask)   # per-unit: reflects high-stakes tier bump
             spec.judge_model = judge_id
             uid = getattr(subtask, "id", "?")
             spec.judge_logger = lambda decision, reason, _u=uid: store.record(

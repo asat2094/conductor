@@ -124,3 +124,27 @@ def test_writes_for_scopes_commit_to_declared_files(tmp_path):
                              capture_output=True, text=True).stdout
     assert "a.py" in tracked
     assert "stray.json" not in tracked                 # scope guard at the merge boundary
+
+
+def test_dirty_tree_refuses_to_construct(tmp_path):
+    # CRITICAL regression: uncommitted tracked edits must never be swept into unit commits
+    import pytest
+    wd = _repo(tmp_path)
+    (tmp_path / "tracked.py").write_text("original\n")
+    subprocess.run("git add tracked.py && git -c core.hooksPath=/dev/null commit -q --no-verify -m t",
+                   shell=True, cwd=wd, check=True)
+    (tmp_path / "tracked.py").write_text("SECRET-UNCOMMITTED-EDIT\n")   # dirty tracked file
+    with pytest.raises(RuntimeError, match="dirty"):
+        GitMergeQueue(wd, "main")
+    # nothing landed anywhere
+    show = subprocess.run("git show main:tracked.py", shell=True, cwd=wd,
+                          capture_output=True, text=True).stdout
+    assert "SECRET" not in show
+
+
+def test_untracked_files_also_refuse(tmp_path):
+    import pytest
+    wd = _repo(tmp_path)
+    (tmp_path / "scratch.txt").write_text("wip\n")     # untracked counts as dirty too
+    with pytest.raises(RuntimeError, match="dirty"):
+        GitMergeQueue(wd, "main")

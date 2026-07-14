@@ -38,6 +38,9 @@ def main(argv=None) -> int:
     ap.add_argument("--merge-target", default=None, metavar="BRANCH",
                     help="git-backed merge queue: land GREEN waves onto this branch (ADR-0041)")
     ap.add_argument("--suite-cmd", default=None, help="full-suite command run after each unit merge")
+    ap.add_argument("--judge", action="store_true",
+                    help="inconclusive-only judge tiebreak (ADR-0038): a judge-role model decides "
+                         "units with NO mechanical signal; never overrides a FAIL; per-DAG quota")
     args = ap.parse_args(argv)
 
     with open(args.briefs) as f:
@@ -57,6 +60,24 @@ def main(argv=None) -> int:
         writes = {b["id"]: b.get("writes_files", []) for b in briefs}
         kw["merge_queue"] = GitMergeQueue(args.workdir, args.merge_target, suite_cmd=args.suite_cmd,
                                           writes_for=writes.get)
+    if args.judge:
+        from harness.model_call import call_model
+        from harness.role_policy import resolve_model
+
+        def _judge(artifact) -> bool:
+            # ADR-0038: only ever invoked on inconclusive slices (the gate guarantees it);
+            # strict parse — anything other than a leading ACCEPT is a reject.
+            spec = resolve_model("judge")
+            reply = call_model(spec, (
+                "You are a tiebreak judge for a code unit that has NO mechanical test signal.\n"
+                "Files changed: " + ", ".join(artifact.changed_files) + "\n"
+                "Diff:\n" + (artifact.diff_text or "(no diff captured)") + "\n\n"
+                "Reply with exactly one word — ACCEPT if the change is plausibly correct and "
+                "in-scope, REJECT otherwise."))
+            return reply.strip().upper().startswith("ACCEPT")
+
+        kw["judge"] = _judge
+        kw["no_test_inconclusive"] = True
 
     result, tracker = build_live(
         briefs, workdir=args.workdir,

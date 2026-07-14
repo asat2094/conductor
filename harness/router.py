@@ -21,6 +21,12 @@ def cost_skip(subtask: SubTask) -> AgentType | None:
 
 
 def route(subtask: SubTask, profiles: dict[str, CapabilityProfile]) -> AgentType:
+    """Legacy binary route: gemma4 (LOCAL) or claude_agent (trusted orchestrator tier).
+
+    ADR-0017 note: both possible outcomes are admissible for high-sensitivity units
+    (local ollama never leaves the machine; claude_agent is the trusted paid tier). This
+    function must NEVER be extended to return a free-cloud provider — cloud routing lives
+    in rank_providers(), which enforces the sensitivity boundary explicitly."""
     g = profiles["gemma4"]
 
     if subtask.type in _ALWAYS_CLAUDE:

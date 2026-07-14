@@ -123,3 +123,20 @@ def test_build_live_codegraph_reverifies_per_wave_degrade_clean(tmp_path):
     )
     assert result.accepted == 1
     assert result.verify.status in ("unverified", "verified")   # never blocked the build
+
+
+def test_judge_never_fires_for_bumped_tier_units(tmp_path):
+    # HIGH regression (stale author-identity): stakes are unified — a bumped-tier unit is
+    # high_stakes at the gate too, so the judge path is structurally unreachable for it
+    # (held-out oracle mandatory instead). No stale-identity comparison can ever happen.
+    def _boom(art):
+        raise AssertionError("judge must not fire for a high-stakes/bumped-tier unit")
+    # (a) high-sensitivity unit
+    hs = {**A, "sensitivity": "high"}
+    result, tracker = build_live([hs], **_judge_kw(tmp_path, judge=_boom))
+    assert result.accepted == 0                              # oracle demanded, judge never called
+    assert not [e for e in tracker.events() if e["state"] == "JUDGE_TIEBREAK"]
+    # (b) maker configured globally high-stakes
+    result2, tracker2 = build_live([A], high_stakes=True, **_judge_kw(tmp_path, judge=_boom))
+    assert result2.accepted == 0
+    assert not [e for e in tracker2.events() if e["state"] == "JUDGE_TIEBREAK"]
