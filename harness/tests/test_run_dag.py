@@ -221,3 +221,30 @@ def test_run_dag_resume_skips_accepted_units():
     assert "a" not in dispatched         # already-accepted 'a' skipped
     assert "b" in dispatched
     assert res.board["a"]["state"] == "ACCEPTED" and res.board["a"].get("resumed") is True
+
+
+# --- ADR-0014/0034 cost ceiling + ADR-0028 checkpoint autosave wiring ---
+
+def test_run_dag_cost_ceiling_enforce_holds_unit_as_intervene():
+    from harness.admission import CostCeiling
+    cc = CostCeiling(limit=1000, mode="enforce")     # A costs 5000 est tokens -> blocked
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), cost_ceiling=cc)
+    assert res.board["a"]["state"] == "INTERVENE"
+    assert res.board["a"]["reason"] == "cost_ceiling"
+    assert res.failed == 1
+
+
+def test_run_dag_cost_ceiling_audit_never_blocks():
+    from harness.admission import CostCeiling
+    cc = CostCeiling(limit=1000, mode="audit")
+    res = run_dag([A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), cost_ceiling=cc)
+    assert res.accepted == 1
+    assert cc.breached is True                        # recorded + warned, not blocked
+
+
+def test_run_dag_checkpoints_each_wave(tmp_path):
+    ck = str(tmp_path / "ck.json")
+    run_dag([B, A], workdir=".", process_unit=lambda s, w: _FakeVerdict(90), checkpoint_path=ck)
+    from harness.checkpoint import load_checkpoint
+    ckpt = load_checkpoint(ck)
+    assert "a" in ckpt.get("accepted", []) and "b" in ckpt.get("accepted", [])

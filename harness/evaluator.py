@@ -34,10 +34,16 @@ def _has_test_file(files: list[str]) -> bool:
 def _run_tests(files: list[str]) -> int:
     if not _has_test_file(files):
         return 20  # partial credit — no tests exist, not agent's fault
+    # ADR-0035: the per-file LanguageAdapter owns HOW tests run (pytest / npm test / ...);
+    # this scorer only maps the mechanical outcome to points.
+    from harness.lang.base import adapter_for_path
+    adapter = adapter_for_path(files[0])
+    cmd = adapter.discover_test_cmd(files, ".")
+    if not cmd:
+        return 20  # adapter has no runner for these files — same partial credit as no-tests
     try:
         result = subprocess.run(
-            ["python3", "-m", "pytest", "--tb=no", "-q"] + files,
-            capture_output=True, text=True, timeout=60,
+            cmd, shell=True, capture_output=True, text=True, timeout=60,
         )
         if result.returncode == 0:
             return 35

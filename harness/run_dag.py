@@ -38,8 +38,11 @@ class DagRunResult:
 
 
 def _default_process_unit(subtask: Any, workdir: str) -> Any:
-    from harness.pipeline import run_pipeline
-    return run_pipeline(subtask, workdir=workdir)
+    # Default = the LIVE composed path (real maker -> repair loop -> composed unit_gate), so
+    # conductor.build()/run_dag() without an injected processor exercise the ADR-gated spine —
+    # not the legacy orchestrate/evaluator path (which remains available via harness.pipeline).
+    from harness.live_pipeline import make_live_processor
+    return make_live_processor()(subtask, workdir)
 
 
 def run_dag(
@@ -57,6 +60,8 @@ def run_dag(
     atomicity: str = "wave",
     best_of_n: Optional[Callable[[dict], int]] = None,
     confidence: Optional[Any] = None,
+    cost_ceiling: Optional[Any] = None,
+    checkpoint_path: Optional[str] = None,
 ) -> DagRunResult:
     """Decompose -> verify -> per-wave [cost_skip -> dispatch -> track]. Optional integration:
     `merge_queue` (ADR-0004/0012): each ACCEPTED unit submitted; finalize() decides ff/discard.
@@ -73,7 +78,10 @@ def run_dag(
     MECHANICAL gate selects the FIRST candidate clearing accept_threshold (no vote/debate). None -> N=1
     (current behavior). Caller sizes N from confidence (ADR-0039) / stakes / cost ceiling (ADR-0034).
     `confidence` (ADR-0039): a ConfidenceStore; each unit's gate outcome updates the maker's live
-    per-task-type score, feeding future routing. None -> no live feedback (offline profiles only)."""
+    per-task-type score, feeding future routing. None -> no live feedback (offline profiles only).
+    `cost_ceiling` (ADR-0014/0034): an admission.CostCeiling charged estimated_tokens per dispatch;
+    enforce-blocked units are held as INTERVENE (never silently dropped); audit only warns.
+    `checkpoint_path` (ADR-0028): board checkpointed at every wave boundary for resume."""
     process_unit = process_unit or _default_process_unit
     tracker = tracker or Tracker()
     resumed = set((resume_from or {}).get("accepted", []))
@@ -103,6 +111,17 @@ def run_dag(
             if cost_skip(st) == AgentType.CLAUDE_INLINE:
                 tracker.record(uid, UnitState.INLINE)
                 inline += 1
+                continue
+            # ADR-0014/0034 admission: charge the unit's estimated tokens before dispatch.
+            # enforce-blocked -> INTERVENE (visible, resumable), audit -> records + warns only.
+            if cost_ceiling is not None and not cost_ceiling.spend(getattr(st, "estimated_tokens", 0) or 0):
+                tracker.record(uid, UnitState.INTERVENE, reason="cost_ceiling",
+                               remaining=cost_ceiling.remaining)
+                failed += 1
+                wave_failed = True
+                if failure_mode == "fail_fast":
+                    aborted = True
+                    break
                 continue
             n = max(1, int(best_of_n(brief))) if best_of_n is not None else 1
             tracker.record(uid, UnitState.DISPATCHED, candidates=n)
@@ -150,6 +169,10 @@ def run_dag(
         # wave boundary: re-verify the next wave against accrued GREEN code (REQ-D9)
         if reverify is not None:
             report = reverify(by_id, list(accepted_ids))
+        # ADR-0028: checkpoint the board at every wave boundary so a crash resumes here
+        if checkpoint_path is not None:
+            from harness.checkpoint import make_checkpoint, save_checkpoint
+            save_checkpoint(make_checkpoint(tracker.board()), checkpoint_path)
         # ADR-0041 per-wave atomic promotion: land the wave only if fully GREEN. Only waves that had a
         # real failure OR a real merge submission are promoted/held — a resumed-only or inline-only
         # wave merged nothing, so it neither lands nor holds (fixes overstated disposition). The queue's
