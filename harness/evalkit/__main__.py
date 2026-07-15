@@ -48,6 +48,8 @@ def main(argv=None) -> int:
     ap.add_argument("--suite", default=None, help="bring-your-own suite JSON (default: built-in grid)")
     ap.add_argument("--trials", type=int, default=2)
     ap.add_argument("--sizes", default=None, help="comma-separated context sizes for the default suite")
+    ap.add_argument("--sources", default=None,
+                    help="comma-separated source files to build realistic payloads (else synthetic)")
     ap.add_argument("--language", default="python")
     ap.add_argument("--report", default=None, help="write the scorecard JSON here")
     ap.add_argument("--text", action="store_true", help="print the human leaderboard")
@@ -61,8 +63,10 @@ def main(argv=None) -> int:
     if args.suite:
         suite = load_suite(args.suite)
     else:
+        from harness.evalkit import resolve_sources
         sizes = [int(x) for x in args.sizes.split(",")] if args.sizes else None
-        suite = default_suite(language=args.language, context_sizes=sizes)
+        srcs = resolve_sources(args.sources.split(",")) if args.sources else resolve_sources()
+        suite = default_suite(language=args.language, context_sizes=sizes, sources=srcs or None)
 
     specs, ctx_by_model = [], {}
     for name in args.model:

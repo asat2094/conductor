@@ -108,7 +108,7 @@ Pluggable `Dimension` (accuracy/latency/cost_per_pass/refusal_rate/context_degra
 ```bash
 bash setup.sh          # idempotent setup + prereq check
 /opt/homebrew/bin/pytest -q   # run the full test suite
-python3 gemma4-bench/bench.py  # calibrate gemma4 (thin evalkit client; == python3 -m harness.evalkit --model gemma4 --ingest)
+python3 -m harness.evalkit --model gemma4 --ingest  # calibrate gemma4 capability profiles
 ```
 
 Key files:
@@ -126,4 +126,4 @@ Key files:
 - `harness/profiles.py` — load/save/update + cross-session decay (decay_per_day per-profile)
 - `harness/session_stats.py` — SQLite delegation log
 - `harness/capability_profiles.json` — live gemma4 thresholds (includes decay_per_day)
-- `gemma4-bench/bench.py` — benchmark; merges results via rolling avg (preserves real-session accuracy)
+- `harness/evalkit/` — generic model-evaluation framework (graders, dimensions, suites, runner, scorecard, ingest); `python3 -m harness.evalkit`

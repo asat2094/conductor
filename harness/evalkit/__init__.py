@@ -18,7 +18,7 @@ from harness.evalkit.dimensions import (
     Dimension, DimensionScore, register as register_dimension, resolve as resolve_dimension,
     default_dimensions,
 )
-from harness.evalkit.task import EvalTask, EvalSuite, default_suite, load_suite
+from harness.evalkit.task import EvalTask, EvalSuite, default_suite, load_suite, resolve_sources
 from harness.evalkit.runner import evaluate, TrialResult, model_name
 from harness.evalkit.report import build_scorecard, MeritScorecard, ModelScore, score_model
 from harness.evalkit.ingest import ingest, ingest_profiles, seed_confidence
@@ -26,7 +26,7 @@ from harness.evalkit.ingest import ingest, ingest_profiles, seed_confidence
 __all__ = [
     "Grader", "SyntaxGrader", "KeywordGrader", "OracleGrader", "CompositeGrader",
     "Dimension", "DimensionScore", "register_dimension", "resolve_dimension", "default_dimensions",
-    "EvalTask", "EvalSuite", "default_suite", "load_suite",
+    "EvalTask", "EvalSuite", "default_suite", "load_suite", "resolve_sources",
     "evaluate", "TrialResult", "model_name",
     "build_scorecard", "MeritScorecard", "ModelScore", "score_model",
     "ingest", "ingest_profiles", "seed_confidence",

@@ -22,6 +22,27 @@ Claude (orchestrator)
 
 ## Quickstart
 
+**Install** (idempotent — checks specs, ollama + gemma4, deps, runs tests):
+
+```bash
+git clone https://github.com/asat2094/conductor && cd conductor
+bash setup.sh
+```
+
+**Run a distributed build from the CLI** (the primary entrypoint):
+
+```bash
+# briefs.json = a JSON list of SubtaskBriefs (schema: docs/specs/conductor/schemas/)
+python3 -m harness briefs.json --workdir /path/to/git/repo --report
+#   --style       repo-native lint/format gate       --tdd-gates   git-RED commit-order gate
+#   --codegraph   codegraph verify + per-wave reverify --probes     spec-completeness probes
+#   --atomicity wave|dag   --budget N --budget-mode audit|enforce   --checkpoint ck.json
+#   --merge-target BRANCH  physically fast-forward GREEN waves onto a git branch
+# Exit 0 iff no unit failed.
+```
+
+**Or from Python** (full knobs — judge tiebreak, confidence store, best-of-N, merge queue):
+
 ```python
 from harness.live_pipeline import build_live, build_report
 
@@ -84,7 +105,18 @@ brief (JSON)
 result + stats
 ```
 
-Decomposition (ADR-0011), verification (ADR-0012), per-wave cost-skip (ADR-0016), dispatch (ADR-0024), healing (ADR-0013), tracking (ADR-0021), and progress reporting (ADR-0023) each have their own ADR. See `docs/adr/` for the full design (39 ADRs, covering deterministic routing, author separation, cost awareness, and bounded repair).
+Decomposition (ADR-0011), verification (ADR-0012), per-wave cost-skip (ADR-0016), dispatch (ADR-0024), healing (ADR-0013), tracking (ADR-0021), and progress reporting (ADR-0023) each have their own ADR. See `docs/adr/` for the full design (42 ADRs, covering deterministic routing, author separation, cost awareness, bounded repair, per-wave atomic merge, and the evaluation framework).
+
+## Repository layout
+
+| Path | What's there |
+|---|---|
+| `harness/` | the harness — spine, gates, adapters, routing, tracker ([`harness/README.md`](harness/README.md)) |
+| `harness/evalkit/` | generic model-evaluation framework ([`harness/evalkit/README.md`](harness/evalkit/README.md)) |
+| `harness/lang/` | pluggable per-language adapters ([`harness/lang/README.md`](harness/lang/README.md)) |
+| `harness/optimizer/` | pluggable context-optimizer facade ([`harness/optimizer/README.md`](harness/optimizer/README.md)) |
+| `harness/tests/` | the test suite (`python3 -m pytest -q`) |
+| `docs/` | ADRs, specs, plans ([`docs/README.md`](docs/README.md)) |
 
 ## Tests
 
@@ -92,26 +124,16 @@ Decomposition (ADR-0011), verification (ADR-0012), per-wave cost-skip (ADR-0016)
 python3 -m pytest -q
 ```
 
-434 tests passing. Covers router, evaluator, healer, cost model, capability profiles, parallel dispatch, and the full live pipeline end-to-end.
+589 tests passing. Covers router, evaluator, healer, cost model, capability profiles, parallel dispatch, per-wave git merge, the evaluation framework, and the full live pipeline end-to-end.
 
 ## Status
 
-**Research-validated + live-proven prototype.** The cost model uses placeholder prices (all providers at `0.0`); the cost-skip gate and budget ceiling (ADR-0014/0034) need real per-1k-token prices to gate meaningfully. Running in `audit` mode (ADR-0034) is safe — it tracks spend and warns but never blocks.
+**Live-proven, fully-wired.** Every designed ADR is reachable from `python3 -m harness` / `build_live`; a multi-unit DAG has been run end-to-end against real gemma4 with per-wave landing to a git branch. Cost prices are seeded ballparks — run the budget ceiling in `audit` mode (ADR-0034) first and calibrate against real invoices before `enforce`.
 
 **References:**
-- `docs/adr/` — 39 architecture decision records covering the full design philosophy.
+- `docs/adr/` — 42 architecture decision records covering the full design philosophy.
 - `docs/traceability.md` — traceability matrix linking requirements to ADRs and code.
-- `harness/live_pipeline.py` — the entrypoint (composition of router → makers → evaluator → healer → tracker).
-
-## Setup
-
-```bash
-git clone https://github.com/asat2094/conductor
-cd conductor-develop
-bash setup.sh
-```
-
-`setup.sh` is idempotent. It checks system specs, verifies ollama + gemma4, installs dependencies, and runs the full test suite.
+- `harness/__main__.py` — the CLI entrypoint; `harness/live_pipeline.py` — the library composition (onboard → router → makers → gates → merge → tracker).
 
 ## Configuration
 
@@ -140,7 +162,7 @@ export CONDUCTOR_DEFAULT_MAKER="deepseek" # prefer free DeepSeek Zen
 python3 -m harness.evalkit --model gemma4 --ingest --text   # calibrate + feed routing profiles
 python3 -m harness.evalkit --model gemma4 --model sonnet --report card.json   # rank several models
 python3 -m harness.evalkit --model gemma4 --suite my_suite.json               # bring your own tasks
-python3 gemma4-bench/bench.py  # backward-compat: a thin evalkit client for gemma4
+python3 -m harness.evalkit --model gemma4 --sources harness/router.py,harness/evaluator.py  # realistic payloads
 ```
 
 evalkit is reusable anywhere model evaluation is needed — mechanical graders (no model judges output, Law 1/2), pluggable `Dimension` axes, built-in + bring-your-own suites, published objective report; feeding routing is an explicit opt-in `ingest()` step.
