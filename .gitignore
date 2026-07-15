@@ -14,3 +14,7 @@ harness/session_stats.db
 
 # opencode node_modules (installed by setup.sh per-user)
 node_modules/
+
+# local git-hook tooling (machine-specific)
+post-commit-scripts/
+pre-commit-scripts/
