@@ -278,9 +278,9 @@ if [[ -f "$PROFILES" ]]; then
   MAX_TOK=$(python3 -c "import json; d=json.load(open('$PROFILES')); print(d['gemma4']['max_reliable_tokens'])")
   ok "Profiles exist — gemma4 max_reliable_tokens: ${MAX_TOK}"
   if [[ "$MAX_TOK" -eq 8000 ]]; then
-    warn "Profiles still at default (8000) — benchmark not run yet"
-    warn "Run: cd $CONDUCTOR_DIR && python3 gemma4-bench/bench.py"
-    warn "(Takes 15-30 min. Sets real token limits + accuracy scores.)"
+    warn "Profiles still at default (8000) — calibration not run yet"
+    warn "Run: cd $CONDUCTOR_DIR && python3 -m harness.evalkit --model gemma4 --ingest"
+    warn "(Evaluates gemma4 across the context grid; sets real token limits + accuracy scores.)"
   fi
 else
   fail "capability_profiles.json missing"
@@ -298,8 +298,8 @@ if [[ $FAILED -eq 0 ]]; then
   echo "  Router:    python3 -m harness.router '<subtask_json>'"
   echo "  Evaluator: python3 -m harness.evaluator '<eval_json>'"
   echo ""
-  echo "  Next: run the benchmark to calibrate real thresholds:"
-  echo "    cd $CONDUCTOR_DIR && python3 gemma4-bench/bench.py"
+  echo "  Next: calibrate real thresholds via evalkit:"
+  echo "    cd $CONDUCTOR_DIR && python3 -m harness.evalkit --model gemma4 --ingest"
 else
   echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo -e "${RED}  Setup incomplete — fix errors above and re-run.${NC}"

@@ -1,8 +1,8 @@
 # ADR-0042: Generic, pluggable model-evaluation framework (evalkit)
 
-- **Status:** Accepted
+- **Status:** Accepted — **update (2026-07-15):** the `gemma4-bench/` wrapper was **removed** entirely once evalkit fully absorbed its one unique bit (`resolve_sources`, now `harness.evalkit.resolve_sources` + `default_suite(sources=...)` + the CLI `--sources` flag). Calibration is now solely `python3 -m harness.evalkit --model gemma4 --ingest`. Keeping a wrapper would have meant evalkit hadn't truly generalized it.
 - **Date:** 2026-07-14
-- **Supersedes:** the gemma4-locked `gemma4-bench/bench.py` calibration script (now a thin client).
+- **Supersedes:** the gemma4-locked `gemma4-bench/bench.py` calibration script (removed; folded into evalkit).
 - **Requirements:** REQ-EVAL1 (model-agnostic evaluation), REQ-EVAL2 (objective merit scoring), REQ-EVAL3 (extensible dimensions + suites)
 
 ## Context

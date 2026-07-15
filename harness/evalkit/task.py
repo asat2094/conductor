@@ -7,7 +7,9 @@ so the report can break results out by suite. default_suite() ships the standard
 load_suite() ingests a user's own JSON — both feed the same runner and report.
 """
 import json
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from harness.evalkit.graders import (
@@ -54,15 +56,29 @@ class EvalSuite:
         return len(self.tasks)
 
 
-def _synthetic_payload(target_tokens: int) -> str:
-    """Portable filler (~4 chars/token) — no dependency on any host repo, so the default
-    suite runs anywhere."""
-    unit = "def helper_%d(x):\n    return x * 2  # sample context line\n\n"
+def resolve_sources(candidates: "list | None" = None, *, env_var: str = "EVALKIT_SOURCES") -> list[str]:
+    """Resolve source texts used to build realistic context payloads (absorbed from the old
+    gemma4-bench). Precedence: `env_var` (os.pathsep-separated paths) → `candidates` (paths) →
+    [] (caller falls back to synthetic). Portable — no repo-specific defaults."""
+    env = os.environ.get(env_var)
+    if env:
+        paths = [Path(p) for p in env.split(os.pathsep) if p]
+    elif candidates is not None:
+        paths = [Path(p) for p in candidates]
+    else:
+        paths = []
+    return [p.read_text() for p in paths if p.exists()]
+
+
+def _payload(target_tokens: int, sources: list[str] | None) -> str:
+    """Build a ~target_tokens context payload. Real `sources` (cycled) give a realistic probe;
+    with none, portable synthetic filler keeps the default suite runnable anywhere."""
     target_chars = target_tokens * 4
-    out, i = [], 0
-    n = 0
+    pool = sources or ["def helper_%d(x):\n    return x * 2  # sample context line\n\n" % i
+                       for i in range(64)]
+    out, n, i = [], 0, 0
     while n < target_chars:
-        s = unit % i
+        s = pool[i % len(pool)]
         out.append(s)
         n += len(s)
         i += 1
@@ -71,15 +87,17 @@ def _synthetic_payload(target_tokens: int) -> str:
 
 def default_suite(*, language: str = "python",
                   context_sizes: list[int] | None = None,
-                  task_types: list[str] | None = None) -> EvalSuite:
+                  task_types: list[str] | None = None,
+                  sources: list[str] | None = None) -> EvalSuite:
     """The standard capability grid: task_type x context_size, each graded by
-    SyntaxGrader (language-agnostic) + a task KeywordGrader."""
+    SyntaxGrader (language-agnostic) + a task KeywordGrader. `sources` (real code texts, e.g. from
+    resolve_sources) build realistic payloads; omitted -> portable synthetic filler."""
     sizes = context_sizes or DEFAULT_CONTEXT_SIZES
     types = task_types or list(_INSTRUCTION)
     tasks = []
     for ttype in types:
         for size in sizes:
-            payload = _synthetic_payload(size)
+            payload = _payload(size, sources)
             # Syntax GATES the keyword check: invalid code scores 0 even if it contains the
             # expected symbol — a keyword match must not partially offset a parse failure.
             grader = GatedGrader(SyntaxGrader(), KeywordGrader(_KEYWORDS[ttype]))
